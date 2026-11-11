@@ -42,3 +42,21 @@ export async function PATCH(
     return NextResponse.json({ error: err.message || 'Failed to update player' }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await verifyAdminAuth(req);
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    await playerService.deletePlayer(id, auth.adminId);
+    return NextResponse.json({ success: true, message: 'Player deleted successfully' });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Failed to delete player' }, { status: 500 });
+  }
+}

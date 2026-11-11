@@ -545,6 +545,152 @@ export const mockStore = {
     return globalMock.__MOCK_DB__.players[index];
   },
 
+  deletePlayer(playerId: string, adminId: string = 'admin'): boolean {
+    const pIndex = globalMock.__MOCK_DB__.players.findIndex(p => p.id === playerId);
+    if (pIndex === -1) return false;
+
+    const removed = globalMock.__MOCK_DB__.players.splice(pIndex, 1)[0];
+    globalMock.__MOCK_DB__.payments = globalMock.__MOCK_DB__.payments.filter(pay => pay.player_id !== playerId);
+
+    globalMock.__MOCK_DB__.activityLogs.unshift({
+      id: `log-${Date.now()}`,
+      admin_id: adminId,
+      action: 'player_deleted',
+      entity_type: 'player',
+      entity_id: playerId,
+      old_values: { full_name: removed.full_name, registration_id: removed.registration_id },
+      new_values: null,
+      created_at: new Date().toISOString()
+    });
+
+    return true;
+  },
+
+  deletePlayers(playerIds: string[], adminId: string = 'admin'): number {
+    const idSet = new Set(playerIds);
+    const beforeCount = globalMock.__MOCK_DB__.players.length;
+
+    globalMock.__MOCK_DB__.players = globalMock.__MOCK_DB__.players.filter(p => !idSet.has(p.id));
+    globalMock.__MOCK_DB__.payments = globalMock.__MOCK_DB__.payments.filter(pay => !idSet.has(pay.player_id));
+
+    const deletedCount = beforeCount - globalMock.__MOCK_DB__.players.length;
+
+    globalMock.__MOCK_DB__.activityLogs.unshift({
+      id: `log-${Date.now()}`,
+      admin_id: adminId,
+      action: 'bulk_players_deleted',
+      entity_type: 'player',
+      entity_id: null,
+      old_values: { count: deletedCount, ids: playerIds },
+      new_values: null,
+      created_at: new Date().toISOString()
+    });
+
+    return deletedCount;
+  },
+
+  deleteAllPlayers(adminId: string = 'admin'): number {
+    const count = globalMock.__MOCK_DB__.players.length;
+    globalMock.__MOCK_DB__.players = [];
+    globalMock.__MOCK_DB__.payments = [];
+
+    globalMock.__MOCK_DB__.activityLogs.unshift({
+      id: `log-${Date.now()}`,
+      admin_id: adminId,
+      action: 'all_players_deleted',
+      entity_type: 'player',
+      entity_id: null,
+      old_values: { count },
+      new_values: null,
+      created_at: new Date().toISOString()
+    });
+
+    return count;
+  },
+
+  createAdminPlayer(playerData: any, adminId: string = 'admin'): PlayerWithPayment {
+    const seq = globalMock.__MOCK_DB__.nextSeq++;
+    const regId = `CAL-${new Date().getFullYear()}-${String(seq).padStart(6, '0')}`;
+    const playerId = `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const paymentId = `pay-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+    const newPaymentRecord = {
+      id: paymentId,
+      amount: playerData.amount || globalMock.__MOCK_DB__.settings.registration_fee || 500,
+      currency: 'INR',
+      payment_method: 'UPI',
+      utr_number: playerData.utr_number || `MANUAL-${Date.now()}`.substring(0, 12),
+      screenshot_path: playerData.screenshot_path || 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80',
+      payment_status: (playerData.payment_status || 'verified') as PaymentStatus,
+      rejection_reason: null,
+      verified_at: playerData.payment_status === 'verified' ? new Date().toISOString() : null
+    };
+
+    const newPlayer: PlayerWithPayment = {
+      id: playerId,
+      registration_id: regId,
+      full_name: playerData.full_name,
+      email: playerData.email,
+      mobile: playerData.mobile,
+      date_of_birth: playerData.date_of_birth || '2000-01-01',
+      city: playerData.city || 'Mumbai',
+      address: playerData.address || 'Address provided by Admin',
+      profile_photo_path: playerData.profile_photo_path || null,
+      playing_role: playerData.playing_role || 'batsman',
+      batting_style: playerData.batting_style || 'right_hand',
+      bowling_arm: playerData.bowling_arm || 'right_arm',
+      bowling_type: playerData.bowling_type || 'medium',
+      experience_level: playerData.experience_level || 'beginner',
+      previous_team_name: playerData.previous_team_name || null,
+      previous_captain_name: playerData.previous_captain_name || null,
+      previous_tournament: Boolean(playerData.previous_tournament),
+      previous_tournament_name: playerData.previous_tournament_name || null,
+      additional_information: playerData.additional_information || null,
+      emergency_contact_name: playerData.emergency_contact_name || 'Contact Info',
+      emergency_relationship: playerData.emergency_relationship || 'Family',
+      emergency_mobile: playerData.emergency_mobile || playerData.mobile,
+      registration_status: (playerData.registration_status || (playerData.payment_status === 'verified' ? 'approved' : 'under_review')) as RegistrationStatus,
+      rejection_reason: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      payment: newPaymentRecord
+    };
+
+    const newPayment: PaymentWithPlayer = {
+      ...newPaymentRecord,
+      player_id: playerId,
+      verified_by: adminId,
+      created_at: newPlayer.created_at,
+      updated_at: newPlayer.updated_at,
+      player: {
+        id: playerId,
+        registration_id: regId,
+        full_name: newPlayer.full_name,
+        email: newPlayer.email,
+        mobile: newPlayer.mobile,
+        playing_role: newPlayer.playing_role,
+        city: newPlayer.city,
+        profile_photo_path: newPlayer.profile_photo_path
+      }
+    };
+
+    globalMock.__MOCK_DB__.players.unshift(newPlayer);
+    globalMock.__MOCK_DB__.payments.unshift(newPayment);
+
+    globalMock.__MOCK_DB__.activityLogs.unshift({
+      id: `log-${Date.now()}`,
+      admin_id: adminId,
+      action: 'admin_player_created',
+      entity_type: 'player',
+      entity_id: playerId,
+      old_values: null,
+      new_values: { full_name: newPlayer.full_name, registration_id: regId },
+      created_at: new Date().toISOString()
+    });
+
+    return newPlayer;
+  },
+
   rejectRegistration(playerId: string, reason: string, adminId: string = 'admin'): PlayerWithPayment {
     const index = globalMock.__MOCK_DB__.players.findIndex(p => p.id === playerId);
     if (index === -1) throw new Error('Player not found');
