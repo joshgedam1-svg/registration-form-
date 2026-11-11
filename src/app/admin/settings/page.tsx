@@ -11,7 +11,12 @@ import {
   CreditCard,
   Users,
   ShieldCheck,
-  Power
+  Power,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 import QRCodeDisplay from '@/components/registration/QRCodeDisplay';
 import { TournamentSettingsRow } from '@/types/settings';
@@ -29,6 +34,9 @@ export default function TournamentSettingsPage() {
   const [capacity, setCapacity] = useState(100);
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [instructions, setInstructions] = useState('');
+  const [upiQrPath, setUpiQrPath] = useState<string | null>(null);
+  const [uploadingQr, setUploadingQr] = useState(false);
+  const [qrFileName, setQrFileName] = useState<string | null>(null);
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -44,6 +52,7 @@ export default function TournamentSettingsPage() {
         setCapacity(d.maximum_player_capacity);
         setRegistrationOpen(d.registration_open);
         setInstructions(d.registration_instructions || '');
+        setUpiQrPath(d.upi_qr_path || null);
       }
     } catch (err) {
       console.error('Failed to load settings:', err);
@@ -55,6 +64,53 @@ export default function TournamentSettingsPage() {
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('QR image file size must be less than 5 MB');
+      return;
+    }
+
+    setUploadingQr(true);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+
+      const res = await fetch('/api/uploads/tournament-qr', {
+        method: 'POST',
+        body: data
+      });
+
+      const json = await res.json();
+      if (res.ok && json.filePath) {
+        setUpiQrPath(json.filePath);
+        setQrFileName(json.fileName || file.name);
+        setFeedback({
+          type: 'success',
+          message: 'Custom QR code uploaded successfully! Click "Save Tournament Settings" below to apply it live.'
+        });
+      } else {
+        alert(json.error || 'Failed to upload QR code image');
+      }
+    } catch (err) {
+      console.error('Failed to upload QR code:', err);
+      alert('Failed to upload QR image. Please try again.');
+    } finally {
+      setUploadingQr(false);
+    }
+  };
+
+  const removeCustomQr = () => {
+    setUpiQrPath(null);
+    setQrFileName(null);
+    setFeedback({
+      type: 'success',
+      message: 'Reverted to auto-generated dynamic UPI QR code. Click "Save Tournament Settings" to confirm.'
+    });
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,13 +127,14 @@ export default function TournamentSettingsPage() {
           upi_id: upiId.trim(),
           maximum_player_capacity: Number(capacity),
           registration_open: registrationOpen,
-          registration_instructions: instructions.trim()
+          registration_instructions: instructions.trim(),
+          upi_qr_path: upiQrPath
         })
       });
 
       const json = await res.json();
       if (res.ok && json.success) {
-        setFeedback({ type: 'success', message: 'Tournament settings updated successfully!' });
+        setFeedback({ type: 'success', message: 'Tournament settings and UPI rails updated successfully!' });
       } else {
         setFeedback({ type: 'error', message: json.error || 'Failed to update settings' });
       }
@@ -98,29 +155,29 @@ export default function TournamentSettingsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 pb-12">
       {/* Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-brand-dark tracking-tight">
           Tournament Settings & Gateway Configuration
         </h1>
         <p className="text-xs sm:text-sm text-brand-muted mt-0.5">
-          Configure tournament parameters, live UPI payment details, player quotas, and registration toggles.
+          Configure tournament parameters, live UPI payment details, custom merchant QR codes, and player quotas.
         </p>
       </div>
 
       {feedback && (
         <div
-          className={`p-4 rounded-xl border text-xs sm:text-sm flex items-center gap-2.5 ${
+          className={`p-4 rounded-xl border text-xs sm:text-sm flex items-center gap-2.5 transition-all ${
             feedback.type === 'success'
               ? 'bg-green-50 border-green-200 text-green-900'
               : 'bg-red-50 border-red-200 text-red-900'
           }`}
         >
           {feedback.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
           ) : (
-            <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
           )}
           <span className="font-medium">{feedback.message}</span>
         </div>
@@ -129,7 +186,7 @@ export default function TournamentSettingsPage() {
       <form onSubmit={handleSave} className="space-y-6">
         {/* Registration Toggle Status Banner */}
         <div
-          className={`p-5 rounded-xl border transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+          className={`p-5 rounded-2xl border transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs ${
             registrationOpen
               ? 'bg-light-green/60 border-primary-green/30'
               : 'bg-red-50 border-red-200'
@@ -163,7 +220,7 @@ export default function TournamentSettingsPage() {
           <button
             type="button"
             onClick={() => setRegistrationOpen(!registrationOpen)}
-            className={`px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-colors shadow-xs ${
+            className={`px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-xs shrink-0 ${
               registrationOpen
                 ? 'bg-red-100 hover:bg-red-200 text-red-700'
                 : 'bg-primary-green hover:bg-primary-dark text-white'
@@ -174,7 +231,7 @@ export default function TournamentSettingsPage() {
         </div>
 
         {/* Core Parameters Box */}
-        <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
           <h2 className="font-bold text-sm text-brand-dark uppercase tracking-wide pb-2 border-b border-gray-100">
             Tournament Parameters
           </h2>
@@ -182,20 +239,20 @@ export default function TournamentSettingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-brand-dark mb-1">
-                Tournament Name
+                Tournament Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={tournamentName}
                 onChange={e => setTournamentName(e.target.value)}
-                className="w-full h-11 px-3.5 rounded-lg border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
+                className="w-full h-11 px-3.5 rounded-xl border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-brand-dark mb-1">
-                Maximum Player Capacity
+                Maximum Player Capacity <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -204,7 +261,7 @@ export default function TournamentSettingsPage() {
                 required
                 value={capacity}
                 onChange={e => setCapacity(Number(e.target.value))}
-                className="w-full h-11 px-3.5 rounded-lg border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
+                className="w-full h-11 px-3.5 rounded-xl border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
               />
               <span className="text-[11px] text-brand-muted mt-0.5 block">
                 Total allowed verified players before registrations lock.
@@ -213,25 +270,50 @@ export default function TournamentSettingsPage() {
           </div>
         </div>
 
-        {/* UPI Gateway & Payment Config */}
-        <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
-          <h2 className="font-bold text-sm text-brand-dark uppercase tracking-wide pb-2 border-b border-gray-100">
-            Official UPI Payment Rails
-          </h2>
+        {/* ============================================================================== */}
+        {/* UPI Gateway & Payment Config + Custom QR Uploader */}
+        {/* ============================================================================== */}
+        <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
+          <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+            <div>
+              <h2 className="font-bold text-sm text-brand-dark uppercase tracking-wide">
+                Official UPI Payment Rails & QR Code
+              </h2>
+              <p className="text-xs text-brand-muted mt-0.5">
+                Set receiver UPI ID, registration fee, or upload your merchant bank QR scanner.
+              </p>
+            </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-xl bg-gray-50 border border-brand-border">
-            {/* Live QR Preview */}
-            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+              upiQrPath
+                ? 'bg-light-green text-primary-green border border-primary-green/20'
+                : 'bg-slate-100 text-slate-700'
+            }`}>
+              {upiQrPath ? 'Custom QR Code Active' : 'Dynamic NPCI QR Active'}
+            </span>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-start gap-6 p-5 rounded-2xl bg-gray-50/80 border border-brand-border">
+            {/* Live QR Preview Box */}
+            <div className="flex flex-col items-center gap-2 shrink-0 mx-auto md:mx-0">
               <QRCodeDisplay
                 upiId={upiId || 'cricketauctionleague@okhdfcbank'}
                 amount={registrationFee || 500}
                 tournamentName={tournamentName || 'Cricket Auction League'}
+                customQrPath={upiQrPath}
+                className="relative w-44 h-44 bg-white border border-brand-border rounded-2xl p-3 shadow-xs flex items-center justify-center shrink-0 overflow-hidden"
               />
-              <span className="text-[10px] font-semibold text-brand-muted uppercase">Live QR Preview</span>
+              <span className="text-[11px] font-bold text-brand-dark uppercase tracking-wide">
+                Live Public Preview
+              </span>
+              <span className="text-[10px] text-brand-muted text-center max-w-[170px]">
+                {upiQrPath ? 'Displaying your uploaded merchant QR image' : 'Displaying auto-generated ₹' + registrationFee + ' UPI QR'}
+              </span>
             </div>
 
-            {/* Inputs */}
+            {/* Inputs & Custom QR Upload Controls */}
             <div className="flex-1 w-full space-y-4">
+              {/* UPI ID */}
               <div>
                 <label className="block text-xs font-semibold text-brand-dark mb-1">
                   Official Receiver UPI ID <span className="text-red-500">*</span>
@@ -242,13 +324,14 @@ export default function TournamentSettingsPage() {
                   value={upiId}
                   onChange={e => setUpiId(e.target.value)}
                   placeholder="cricketauctionleague@okhdfcbank"
-                  className="w-full h-11 px-3.5 rounded-lg border border-brand-border text-xs sm:text-sm font-mono text-brand-dark bg-white focus-ring"
+                  className="w-full h-11 px-3.5 rounded-xl border border-brand-border text-xs sm:text-sm font-mono text-brand-dark bg-white focus-ring"
                 />
                 <span className="text-[11px] text-brand-muted mt-0.5 block">
-                  The UPI ID shown to players and embedded inside the QR code.
+                  The UPI ID shown to players and embedded inside payment copies.
                 </span>
               </div>
 
+              {/* Registration Fee */}
               <div>
                 <label className="block text-xs font-semibold text-brand-dark mb-1">
                   Fixed Registration Fee (INR) <span className="text-red-500">*</span>
@@ -264,16 +347,95 @@ export default function TournamentSettingsPage() {
                     required
                     value={registrationFee}
                     onChange={e => setRegistrationFee(Number(e.target.value))}
-                    className="w-full h-11 pl-8 pr-3.5 rounded-lg border border-brand-border text-xs sm:text-sm font-bold text-brand-dark bg-white focus-ring"
+                    className="w-full h-11 pl-8 pr-3.5 rounded-xl border border-brand-border text-xs sm:text-sm font-bold text-brand-dark bg-white focus-ring"
                   />
                 </div>
+              </div>
+
+              {/* Custom QR Code Upload Section */}
+              <div className="pt-2 border-t border-gray-200/80">
+                <label className="block text-xs font-bold text-brand-dark mb-1.5">
+                  Custom Merchant QR Code Image (PhonePe / GPay / Paytm / Bank QR)
+                </label>
+
+                {upiQrPath ? (
+                  <div className="p-3.5 bg-white border border-primary-green/30 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-lg bg-light-green text-primary-green flex items-center justify-center shrink-0 border border-primary-green/20">
+                        <ImageIcon className="w-5 h-5 text-primary-green" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-brand-dark truncate">
+                            {qrFileName || 'Custom Merchant QR Active'}
+                          </span>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-primary-green shrink-0" />
+                        </div>
+                        <span className="text-[11px] text-primary-green font-semibold block">
+                          Shown on public registration form
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="px-3 py-1.5 rounded-lg border border-brand-border hover:bg-gray-50 text-xs font-semibold text-brand-dark cursor-pointer transition-colors">
+                        <span>Replace</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={handleQrUpload}
+                          disabled={uploadingQr}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={removeCustomQr}
+                        className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                        title="Remove custom QR and revert to auto-generated QR"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 hover:border-primary-green rounded-xl cursor-pointer bg-white hover:bg-light-green/20 transition-all text-center">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handleQrUpload}
+                      disabled={uploadingQr}
+                    />
+                    {uploadingQr ? (
+                      <div className="flex items-center gap-2 text-xs text-primary-green font-medium py-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Uploading merchant QR image...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 text-primary-green mb-1" />
+                        <span className="text-xs font-bold text-brand-dark">
+                          Click to upload your custom UPI QR code
+                        </span>
+                        <span className="text-[11px] text-brand-muted mt-0.5">
+                          PhonePe, Google Pay, Paytm, or Bank QR (PNG, JPG, WebP max 5MB)
+                        </span>
+                      </>
+                    )}
+                  </label>
+                )}
+
+                <p className="text-[11px] text-brand-muted mt-1.5 leading-relaxed">
+                  <strong>Tip:</strong> If you upload a custom QR, players will scan your uploaded merchant code directly. If you leave it empty or remove it, the system automatically generates a dynamic green NPCI QR code encoded with your UPI ID.
+                </p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Registration Instructions */}
-        <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-xs space-y-3">
+        <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-3">
           <h2 className="font-bold text-sm text-brand-dark uppercase tracking-wide pb-2 border-b border-gray-100">
             Player Registration Instructions
           </h2>
@@ -283,17 +445,20 @@ export default function TournamentSettingsPage() {
               value={instructions}
               onChange={e => setInstructions(e.target.value)}
               placeholder="Instructions displayed on the player registration and payment section..."
-              className="w-full p-3.5 rounded-lg border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
+              className="w-full p-3.5 rounded-xl border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring leading-relaxed"
             />
           </div>
         </div>
 
         {/* Save Button */}
-        <div className="flex justify-end pt-2">
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs text-brand-muted">
+            All updates immediately sync across public forms and admin dashboards.
+          </span>
           <button
             type="submit"
             disabled={saving}
-            className="px-6 h-11 rounded-xl bg-primary-green hover:bg-primary-dark text-white font-semibold text-sm transition-colors flex items-center gap-2 shadow-sm disabled:opacity-60"
+            className="px-6 h-11 rounded-xl bg-primary-green hover:bg-primary-dark text-white font-bold text-sm transition-all flex items-center gap-2 shadow-sm hover:shadow-md disabled:opacity-60 active:scale-95"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             <span>Save Tournament Settings</span>
@@ -303,4 +468,3 @@ export default function TournamentSettingsPage() {
     </div>
   );
 }
-

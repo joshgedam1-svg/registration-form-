@@ -716,6 +716,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
               upiId={settings.upi_id}
               amount={settings.registration_fee}
               tournamentName={settings.tournament_name}
+              customQrPath={settings.upi_qr_path}
             />
 
             {/* UPI Details & Instructions */}
