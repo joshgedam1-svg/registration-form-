@@ -58,8 +58,8 @@ export default function TournamentSettingsPage() {
   const [qrFileName, setQrFileName] = useState<string | null>(null);
 
   // New: Registration Schedule (Start & End Date)
-  const [startDate, setStartDate] = useState('2026-03-01T00:00');
-  const [endDate, setEndDate] = useState('2026-04-30T23:59');
+  const [startDate, setStartDate] = useState('2026-01-01T00:00');
+  const [endDate, setEndDate] = useState('2027-12-31T23:59');
 
   // New: Tournament Banner Settings
   const [bannerPath, setBannerPath] = useState<string | null>(BANNER_PRESETS[0].url);
@@ -210,24 +210,32 @@ export default function TournamentSettingsPage() {
     setFeedback(null);
 
     try {
+      const payload = {
+        tournament_name: tournamentName.trim(),
+        registration_fee: Number(registrationFee),
+        upi_id: upiId.trim(),
+        maximum_player_capacity: Number(capacity),
+        registration_open: registrationOpen,
+        registration_instructions: instructions.trim(),
+        upi_qr_path: upiQrPath,
+        registration_start_date: startDate ? new Date(startDate).toISOString() : null,
+        registration_end_date: endDate ? new Date(endDate).toISOString() : null,
+        banner_image_path: bannerPath,
+        banner_title: bannerTitle.trim() || tournamentName.trim(),
+        banner_subtitle: bannerSubtitle.trim(),
+        banner_enabled: bannerEnabled
+      };
+
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('cal_tournament_settings', JSON.stringify(payload));
+        } catch (e) {}
+      }
+
       const res = await fetch('/api/admin/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tournament_name: tournamentName.trim(),
-          registration_fee: Number(registrationFee),
-          upi_id: upiId.trim(),
-          maximum_player_capacity: Number(capacity),
-          registration_open: registrationOpen,
-          registration_instructions: instructions.trim(),
-          upi_qr_path: upiQrPath,
-          registration_start_date: startDate ? new Date(startDate).toISOString() : null,
-          registration_end_date: endDate ? new Date(endDate).toISOString() : null,
-          banner_image_path: bannerPath,
-          banner_title: bannerTitle.trim() || tournamentName.trim(),
-          banner_subtitle: bannerSubtitle.trim(),
-          banner_enabled: bannerEnabled
-        })
+        body: JSON.stringify(payload)
       });
 
       const json = await res.json();

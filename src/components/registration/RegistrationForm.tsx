@@ -28,11 +28,61 @@ import {
 } from 'lucide-react';
 
 interface RegistrationFormProps {
-  settings: PublicTournamentSettings;
+  settings?: PublicTournamentSettings;
+  initialSettings?: PublicTournamentSettings;
 }
 
-export default function RegistrationForm({ settings }: RegistrationFormProps) {
+export default function RegistrationForm({ settings: propSettings, initialSettings }: RegistrationFormProps) {
   const router = useRouter();
+  const [settings, setSettings] = useState<PublicTournamentSettings>(
+    (initialSettings || propSettings || {
+      tournament_name: 'Cricket Auction League 2026',
+      registration_fee: 500,
+      upi_id: 'cricketauctionleague@okhdfcbank',
+      upi_qr_path: null,
+      maximum_player_capacity: 100,
+      registration_open: true,
+      registration_instructions: null,
+      registration_start_date: null,
+      registration_end_date: null,
+      banner_image_path: null,
+      banner_title: null,
+      banner_subtitle: null,
+      banner_enabled: true
+    }) as PublicTournamentSettings
+  );
+
+  // Client-side instant fetch to guarantee 100% fresh settings on mount
+  React.useEffect(() => {
+    let isMounted = true;
+
+    // Check localStorage first for instant client-side persistence
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem('cal_tournament_settings');
+        if (local) {
+          const parsed = JSON.parse(local);
+          setSettings(prev => ({ ...prev, ...parsed }));
+        }
+      } catch (e) {}
+    }
+
+    async function refreshSettings() {
+      try {
+        const res = await fetch('/api/public/settings', { cache: 'no-store' });
+        const json = await res.json();
+        if (isMounted && json.success && json.data) {
+          setSettings(prev => ({ ...prev, ...json.data }));
+        }
+      } catch (err) {
+        // Fallback to initial settings
+      }
+    }
+    refreshSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
