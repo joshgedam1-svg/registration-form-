@@ -37,6 +37,11 @@ import {
 } from 'lucide-react';
 import { PlayerWithPayment } from '@/types/player';
 import { formatDate } from '@/lib/utils/format';
+import {
+  registerServiceWorker,
+  requestNotificationPermission,
+  sendLocalPushNotification
+} from '@/lib/notifications';
 
 interface CreatePlayerFormState {
   full_name: string;
@@ -77,6 +82,7 @@ export default function PlayersAdminPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [newSubmissionsFeedOpen, setNewSubmissionsFeedOpen] = useState(true);
+  const [notificationStatus, setNotificationStatus] = useState<NotificationPermission>('default');
 
   // Multi-Selection State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -158,6 +164,11 @@ export default function PlayersAdminPage() {
               `🔔 New Player Registered: ${latest.full_name} submitted ₹${latest.payment?.amount || 500} payment (UTR: ${latest.payment?.utr_number || 'N/A'})!`,
               'info'
             );
+            sendLocalPushNotification(
+              `🔔 Payment Received - ₹${latest.payment?.amount || 500}`,
+              `${latest.full_name} (${latest.registration_id}) ne payment submit kiya. UTR: ${latest.payment?.utr_number || 'N/A'}. Tap to verify.`,
+              '/admin/players'
+            );
           }
         }
 
@@ -176,6 +187,10 @@ export default function PlayersAdminPage() {
 
   useEffect(() => {
     fetchAllPlayers(false);
+    registerServiceWorker();
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationStatus(Notification.permission);
+    }
 
     // Auto-polling every 15 seconds to detect live new registrations
     const interval = setInterval(() => {
@@ -647,6 +662,51 @@ export default function PlayersAdminPage() {
 
           {/* Compact Action Buttons - Perfectly aligned without wrapping awkwardly */}
           <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap">
+            {/* Mobile Drop-Down Push Notification Button */}
+            {notificationStatus !== 'granted' ? (
+              <button
+                onClick={async () => {
+                  const perm = await requestNotificationPermission();
+                  setNotificationStatus(perm);
+                  if (perm === 'granted') {
+                    showToast('✓ Mobile push notifications enabled! Sending welcome test alert...', 'success');
+                    sendLocalPushNotification(
+                      '🔔 Cricket Auction League Alerts Active',
+                      'Aapke mobile par ab sabhi new player registrations aur UPI payments ke alerts drop honge.',
+                      '/admin/players'
+                    );
+                  } else {
+                    alert('Please allow notification permission in your mobile browser to receive alerts.');
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 h-8.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-all shadow-2xs active:scale-95"
+                title="Turn on mobile drop-down notifications"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>Enable Alerts</span>
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  const sent = await sendLocalPushNotification(
+                    '🔔 Payment Received - ₹500',
+                    'Rishabh Pant (CAL-2026-000004) ne UPI payment submit ki. UTR: 403928174632. Tap to review.',
+                    '/admin/players'
+                  );
+                  if (sent) {
+                    showToast('🔔 Test alert sent! Check the top of your mobile screen.', 'success');
+                  } else {
+                    showToast('Please check browser notification permissions.', 'error');
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 h-8.5 px-2.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold transition-all shadow-2xs active:scale-95"
+                title="Send test drop-down notification to your device"
+              >
+                <Bell className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Test Alert</span>
+              </button>
+            )}
+
             {/* Add Player */}
             <button
               onClick={() => setIsAddModalOpen(true)}
