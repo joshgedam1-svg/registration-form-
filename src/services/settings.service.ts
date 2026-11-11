@@ -96,7 +96,7 @@ export const settingsService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = getAdminClient();
-        const { data: current } = await supabase.from('tournament_settings').select('id').limit(1).single();
+        const { data: current } = await supabase.from('tournament_settings').select('id').limit(1).maybeSingle();
 
         if (current && (current as any).id) {
           const currentId = (current as any).id;
@@ -156,6 +156,17 @@ export const settingsService = {
                 updated_at: new Date().toISOString()
               })
               .eq('id', currentId);
+          }
+        } else {
+          // If no row exists yet in Supabase table, insert first settings row
+          try {
+            await supabase.from('tournament_settings').insert({
+              ...updates,
+              updated_by: adminId || null,
+              updated_at: new Date().toISOString()
+            });
+          } catch (insertErr: any) {
+            console.warn('Initial settings insert fallback:', insertErr.message);
           }
         }
       } catch (err) {

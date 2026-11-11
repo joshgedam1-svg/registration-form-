@@ -70,6 +70,29 @@ export default function TournamentSettingsPage() {
   const [bannerFileName, setBannerFileName] = useState<string | null>(null);
 
   const fetchSettings = async () => {
+    // 1. Immediately hydrate from localStorage if present
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem('cal_tournament_settings');
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (parsed.tournament_name) setTournamentName(parsed.tournament_name);
+          if (parsed.registration_fee !== undefined) setRegistrationFee(parsed.registration_fee);
+          if (parsed.upi_id) setUpiId(parsed.upi_id);
+          if (parsed.maximum_player_capacity !== undefined) setCapacity(parsed.maximum_player_capacity);
+          if (parsed.registration_open !== undefined) setRegistrationOpen(parsed.registration_open);
+          if (parsed.registration_instructions) setInstructions(parsed.registration_instructions);
+          if (parsed.upi_qr_path) setUpiQrPath(parsed.upi_qr_path);
+          if (parsed.registration_start_date) setStartDate(parsed.registration_start_date.substring(0, 16));
+          if (parsed.registration_end_date) setEndDate(parsed.registration_end_date.substring(0, 16));
+          if (parsed.banner_image_path) setBannerPath(parsed.banner_image_path);
+          if (parsed.banner_title) setBannerTitle(parsed.banner_title);
+          if (parsed.banner_subtitle) setBannerSubtitle(parsed.banner_subtitle);
+          if (parsed.banner_enabled !== undefined) setBannerEnabled(parsed.banner_enabled);
+        }
+      } catch (e) {}
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/admin/settings');
@@ -77,13 +100,13 @@ export default function TournamentSettingsPage() {
       if (json.success && json.data) {
         const d: TournamentSettingsRow = json.data;
         setSettings(d);
-        setTournamentName(d.tournament_name || 'Cricket Auction League 2026');
-        setRegistrationFee(d.registration_fee ?? 500);
-        setUpiId(d.upi_id || 'cricketauctionleague@okhdfcbank');
-        setCapacity(d.maximum_player_capacity ?? 100);
-        setRegistrationOpen(d.registration_open ?? true);
-        setInstructions(d.registration_instructions || '');
-        setUpiQrPath(d.upi_qr_path || null);
+        if (d.tournament_name) setTournamentName(d.tournament_name);
+        if (d.registration_fee !== undefined) setRegistrationFee(d.registration_fee);
+        if (d.upi_id) setUpiId(d.upi_id);
+        if (d.maximum_player_capacity !== undefined) setCapacity(d.maximum_player_capacity);
+        if (d.registration_open !== undefined) setRegistrationOpen(d.registration_open);
+        if (d.registration_instructions !== undefined) setInstructions(d.registration_instructions || '');
+        if (d.upi_qr_path !== undefined) setUpiQrPath(d.upi_qr_path || null);
 
         // Schedule dates format to datetime-local compatible (YYYY-MM-DDTHH:mm)
         if (d.registration_start_date) {
@@ -96,12 +119,10 @@ export default function TournamentSettingsPage() {
         }
 
         // Banner fields
-        setBannerPath(d.banner_image_path || BANNER_PRESETS[0].url);
-        setBannerTitle(d.banner_title || d.tournament_name || 'Cricket Auction League 2026');
-        setBannerSubtitle(
-          d.banner_subtitle || 'Grand Season Registration • Form Your Legacy on the Pitch'
-        );
-        setBannerEnabled(d.banner_enabled ?? true);
+        if (d.banner_image_path) setBannerPath(d.banner_image_path);
+        if (d.banner_title) setBannerTitle(d.banner_title);
+        if (d.banner_subtitle) setBannerSubtitle(d.banner_subtitle);
+        if (d.banner_enabled !== undefined) setBannerEnabled(d.banner_enabled);
       }
     } catch (err) {
       console.error('Failed to load settings:', err);
