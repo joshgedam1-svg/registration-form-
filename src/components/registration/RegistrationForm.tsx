@@ -85,8 +85,6 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
   const selectedBatting = watch('batting_style');
   const selectedArm = watch('bowling_arm');
   const selectedBowlingType = watch('bowling_type');
-  const selectedExp = watch('experience_level');
-  const hasPrevTournament = watch('previous_tournament');
 
   const copyUpiId = () => {
     navigator.clipboard.writeText(settings.upi_id);
@@ -626,138 +624,12 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       </div>
 
       {/* ============================================================================== */}
-      {/* SECTION 3: CRICKET EXPERIENCE */}
+      {/* SECTION 3: EMERGENCY CONTACT */}
       {/* ============================================================================== */}
       <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-4">
         <div className="flex items-center gap-2.5 pb-2.5 border-b border-gray-100">
           <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
             3
-          </div>
-          <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
-            Cricket Experience
-          </h2>
-        </div>
-
-        {/* Experience Level */}
-        <div>
-          <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-2">
-            Playing Experience Level <span className="text-red-500">*</span>
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {[
-              { id: 'beginner', label: 'Beginner' },
-              { id: '1_2_years', label: '1–2 Years' },
-              { id: '3_5_years', label: '3–5 Years' },
-              { id: '5_plus_years', label: '5+ Years' }
-            ].map(item => {
-              const active = selectedExp === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setValue('experience_level', item.id as any, { shouldValidate: true })}
-                  className={`py-2 px-3 text-center rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-                    active
-                      ? 'bg-primary-green text-white shadow-xs'
-                      : 'bg-gray-100 text-brand-dark hover:bg-gray-200'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Previous Teams */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-1">
-              Previous Team Name
-            </label>
-            <input
-              type="text"
-              {...register('previous_team_name')}
-              placeholder="e.g. Shivaji Park Strikers"
-              className="w-full h-11 px-3.5 rounded-lg border border-brand-border text-sm text-brand-dark bg-white focus-ring"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-1">
-              Previous Captain Name
-            </label>
-            <input
-              type="text"
-              {...register('previous_captain_name')}
-              placeholder="e.g. Pravin Tambe"
-              className="w-full h-11 px-3.5 rounded-lg border border-brand-border text-sm text-brand-dark bg-white focus-ring"
-            />
-          </div>
-        </div>
-
-        {/* Tournament Participation Radio */}
-        <div>
-          <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-2">
-            Participated in Any Prior Tournament?
-          </label>
-          <div className="flex items-center gap-6">
-            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-brand-dark">
-              <input
-                type="radio"
-                checked={hasPrevTournament === true}
-                onChange={() => setValue('previous_tournament', true)}
-                className="w-4 h-4 accent-primary-green"
-              />
-              <span>Yes</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-brand-dark">
-              <input
-                type="radio"
-                checked={hasPrevTournament === false}
-                onChange={() => setValue('previous_tournament', false)}
-                className="w-4 h-4 accent-primary-green"
-              />
-              <span>No</span>
-            </label>
-          </div>
-        </div>
-
-        {hasPrevTournament && (
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-1">
-              Previous Tournament Name
-            </label>
-            <input
-              type="text"
-              {...register('previous_tournament_name')}
-              placeholder="e.g. Mumbai Premier League 2024"
-              className="w-full h-11 px-3.5 rounded-lg border border-brand-border text-sm text-brand-dark bg-white focus-ring"
-            />
-          </div>
-        )}
-
-        {/* Additional Stats */}
-        <div>
-          <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-1">
-            Additional Cricket Achievements & Stats
-          </label>
-          <textarea
-            {...register('additional_information')}
-            rows={2}
-            placeholder="e.g. Best bowling 4/18, highest score 87*, university representation"
-            className="w-full p-3 rounded-lg border border-brand-border text-sm text-brand-dark bg-white focus-ring"
-          />
-        </div>
-      </div>
-
-      {/* ============================================================================== */}
-      {/* SECTION 4: EMERGENCY CONTACT */}
-      {/* ============================================================================== */}
-      <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-4">
-        <div className="flex items-center gap-2.5 pb-2.5 border-b border-gray-100">
-          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
-            4
           </div>
           <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
             Emergency Contact Information
@@ -819,13 +691,13 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       </div>
 
       {/* ============================================================================== */}
-      {/* SECTION 5: REGISTRATION PAYMENT (₹500 UPI) */}
+      {/* SECTION 4: REGISTRATION PAYMENT (₹500 UPI) */}
       {/* ============================================================================== */}
       <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-5">
         <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
-              5
+              4
             </div>
             <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
               Registration Payment
@@ -977,12 +849,12 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       </div>
 
       {/* ============================================================================== */}
-      {/* SECTION 6: DECLARATION */}
+      {/* SECTION 5: DECLARATION */}
       {/* ============================================================================== */}
       <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-3">
         <div className="flex items-center gap-2.5 pb-2.5 border-b border-gray-100">
           <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
-            6
+            5
           </div>
           <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
             Declaration & Agreement

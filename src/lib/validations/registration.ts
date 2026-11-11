@@ -28,11 +28,11 @@ export const registrationSchema = z.object({
   bowling_arm: z.enum(bowlingArms, { message: 'Select your bowling arm' }),
   bowling_type: z.enum(bowlingTypes, { message: 'Select your bowling type' }),
 
-  // Step 4: Cricket Experience
-  experience_level: z.enum(experienceLevels, { message: 'Select your playing experience level' }),
+  // Cricket Experience (Optional / Defaulted)
+  experience_level: z.enum(experienceLevels).optional().default('beginner'),
   previous_team_name: z.string().max(100).optional().nullable(),
   previous_captain_name: z.string().max(100).optional().nullable(),
-  previous_tournament: z.boolean().default(false),
+  previous_tournament: z.boolean().optional().default(false),
   previous_tournament_name: z.string().max(150).optional().nullable(),
   additional_information: z.string().max(500).optional().nullable(),
 

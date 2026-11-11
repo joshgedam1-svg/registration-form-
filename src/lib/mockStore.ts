@@ -376,7 +376,7 @@ export const mockStore = {
       batting_style: formData.batting_style,
       bowling_arm: formData.bowling_arm,
       bowling_type: formData.bowling_type,
-      experience_level: formData.experience_level,
+      experience_level: formData.experience_level || 'beginner',
       previous_team_name: formData.previous_team_name || null,
       previous_captain_name: formData.previous_captain_name || null,
       previous_tournament: Boolean(formData.previous_tournament),
