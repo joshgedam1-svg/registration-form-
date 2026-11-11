@@ -312,6 +312,9 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
             <img
               src={settings.banner_image_path}
               alt="Tournament Hero Banner"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=1200&auto=format&fit=crop&q=80';
+              }}
               className="absolute inset-0 w-full h-full object-cover opacity-60"
             />
           ) : (

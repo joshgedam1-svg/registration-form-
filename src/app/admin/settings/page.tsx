@@ -35,8 +35,8 @@ const BANNER_PRESETS = [
     url: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=1200&auto=format&fit=crop&q=80'
   },
   {
-    name: 'Championship Arena Golden Hour',
-    url: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1200&auto=format&fit=crop&q=80'
+    name: 'Championship Stadium Arena',
+    url: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=1200&auto=format&fit=crop&q=80'
   }
 ];
 
@@ -445,6 +445,9 @@ export default function TournamentSettingsPage() {
                 <img
                   src={bannerPath}
                   alt="Tournament Banner"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = BANNER_PRESETS[0].url;
+                  }}
                   className="absolute inset-0 w-full h-full object-cover opacity-60"
                 />
               )}
@@ -567,6 +570,9 @@ export default function TournamentSettingsPage() {
                     <img
                       src={preset.url}
                       alt={preset.name}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = BANNER_PRESETS[0].url;
+                      }}
                       className="w-10 h-10 rounded-lg object-cover shrink-0"
                     />
                     <span className="text-xs font-medium text-brand-dark leading-tight line-clamp-2">
