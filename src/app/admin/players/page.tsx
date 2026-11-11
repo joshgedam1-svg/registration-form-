@@ -223,7 +223,7 @@ export default function PlayersAdminPage() {
         </div>
 
         {/* Filter Chips */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1.5 pt-1 overflow-x-auto pb-1">
           {[
             { id: 'all', label: 'All Players' },
             { id: 'verified', label: 'Verified Payments' },
@@ -239,7 +239,7 @@ export default function PlayersAdminPage() {
               <button
                 key={f.id}
                 onClick={() => setActiveFilter(f.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors shrink-0 whitespace-nowrap ${
                   active
                     ? 'bg-primary-green text-white shadow-xs'
                     : 'bg-gray-100 text-brand-muted hover:text-brand-dark hover:bg-gray-200'
@@ -266,67 +266,91 @@ export default function PlayersAdminPage() {
       ) : (
         <>
           {/* Mobile Responsive Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:hidden gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:hidden gap-3.5">
             {players.map(player => (
               <div
                 key={player.id}
                 className="bg-white border border-brand-border rounded-xl p-4 shadow-xs space-y-3"
               >
+                {/* Header: Photo, Name, Reg ID, Role */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0">
                     <img
                       src={
                         player.profile_photo_path ||
                         'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'
                       }
                       alt={player.full_name}
-                      className="w-10 h-10 rounded-lg object-cover border border-gray-200 flex-shrink-0"
+                      className="w-12 h-12 rounded-xl object-cover border border-gray-200 shrink-0"
                     />
                     <div className="min-w-0">
                       <h3 className="font-bold text-sm text-brand-dark truncate">{player.full_name}</h3>
-                      <span className="font-mono text-[11px] font-semibold text-primary-green block">
+                      <span className="font-mono text-xs font-semibold text-primary-green block">
                         {player.registration_id}
+                      </span>
+                      <span className="text-[11px] text-brand-muted truncate block">
+                        {player.email}
                       </span>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-light-green text-primary-green border border-primary-green/20">
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase bg-light-green text-primary-green border border-primary-green/20 shrink-0">
                     {player.playing_role.replace('_', ' ')}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-[11px] py-1 border-y border-gray-100">
+                {/* Details Grid */}
+                <div className="grid grid-cols-2 gap-2.5 text-xs py-2.5 px-3 bg-gray-50/80 rounded-lg border border-gray-100">
                   <div>
-                    <span className="text-brand-muted block">City:</span>
-                    <span className="font-medium text-brand-dark">{player.city}</span>
+                    <span className="text-brand-muted text-[11px] block">City & Phone:</span>
+                    <span className="font-medium text-brand-dark block">{player.city}</span>
+                    <span className="font-mono text-brand-muted text-[11px]">{player.mobile}</span>
                   </div>
                   <div>
-                    <span className="text-brand-muted block">Bat / Bowl:</span>
-                    <span className="font-medium text-brand-dark capitalize">
-                      {player.batting_style.replace('_', ' ')} • {player.bowling_arm.replace('_', ' ')}
+                    <span className="text-brand-muted text-[11px] block">Batting & Bowling:</span>
+                    <span className="font-semibold text-brand-dark block">
+                      {player.batting_style === 'right_hand' ? 'Right Hand Bat' : 'Left Hand Bat'}
+                    </span>
+                    <span className="text-[11px] text-brand-muted block">
+                      {player.bowling_arm === 'do_not_bowl' ? 'Do not bowl' : `${player.bowling_arm === 'right_arm' ? 'Right Arm' : 'Left Arm'} • ${player.bowling_type.replace('_', ' ')}`}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-brand-muted block">Payment:</span>
+                  <div className="pt-1.5 border-t border-gray-200/60">
+                    <span className="text-brand-muted text-[11px] block">Payment:</span>
                     {player.payment?.payment_status === 'verified' ? (
-                      <span className="font-semibold text-green-700">Verified (₹500)</span>
+                      <span className="font-semibold text-green-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> Verified (₹500)
+                      </span>
                     ) : player.payment?.payment_status === 'rejected' ? (
-                      <span className="font-semibold text-red-600">Rejected</span>
+                      <span className="font-semibold text-red-600 flex items-center gap-1">
+                        <XCircle className="w-3.5 h-3.5" /> Rejected
+                      </span>
                     ) : (
-                      <span className="font-semibold text-amber-600">Pending</span>
+                      <span className="font-semibold text-amber-600 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" /> Pending
+                      </span>
                     )}
                   </div>
-                  <div>
-                    <span className="text-brand-muted block">Reg Status:</span>
-                    <span className="font-semibold capitalize text-brand-dark">
+                  <div className="pt-1.5 border-t border-gray-200/60">
+                    <span className="text-brand-muted text-[11px] block">Reg Status:</span>
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold capitalize ${
+                        player.registration_status === 'approved'
+                          ? 'bg-green-100 text-green-800'
+                          : player.registration_status === 'rejected'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-200 text-brand-dark'
+                      }`}
+                    >
                       {player.registration_status.replace('_', ' ')}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-1">
+                {/* Mobile Action Buttons */}
+                <div className="flex items-center gap-2 pt-0.5">
                   <button
                     onClick={() => setSelectedPlayer(player)}
-                    className="flex-1 h-9 rounded-lg border border-brand-border bg-gray-50 hover:bg-gray-100 text-xs font-semibold text-brand-dark flex items-center justify-center gap-1.5 transition-colors"
+                    className="flex-1 h-9 rounded-lg border border-brand-border bg-white hover:bg-gray-50 text-xs font-semibold text-brand-dark flex items-center justify-center gap-1.5 transition-colors shadow-xs"
                   >
                     <Eye className="w-3.5 h-3.5 text-brand-muted" />
                     <span>View Dossier</span>
@@ -336,11 +360,22 @@ export default function PlayersAdminPage() {
                     <button
                       onClick={() => handleApprove(player.id)}
                       disabled={actionLoading}
-                      className="px-3 h-9 rounded-lg bg-primary-green hover:bg-primary-dark text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+                      className="px-3.5 h-9 rounded-lg bg-primary-green hover:bg-primary-dark text-white text-xs font-semibold flex items-center gap-1 transition-colors shadow-xs"
                       title="Approve player"
                     >
                       <UserCheck className="w-3.5 h-3.5" />
                       <span>Approve</span>
+                    </button>
+                  )}
+
+                  {player.registration_status !== 'rejected' && (
+                    <button
+                      onClick={() => setRejectingPlayer(player)}
+                      className="px-3 h-9 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold flex items-center gap-1 transition-colors"
+                      title="Reject player"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Reject</span>
                     </button>
                   )}
                 </div>
@@ -348,26 +383,26 @@ export default function PlayersAdminPage() {
             ))}
           </div>
 
-          {/* Desktop Table */}
+          {/* Desktop Table (Visible on lg and above) */}
           <div className="hidden lg:block bg-white border border-brand-border rounded-xl shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto w-full">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-gray-50/80 border-b border-brand-border text-brand-muted font-semibold uppercase tracking-wider">
-                    <th className="py-3 px-4">Player</th>
-                    <th className="py-3 px-4">Registration ID</th>
-                    <th className="py-3 px-4">Role</th>
-                    <th className="py-3 px-4">Mobile & City</th>
-                    <th className="py-3 px-4">Batting / Bowling</th>
-                    <th className="py-3 px-4">Payment</th>
-                    <th className="py-3 px-4">Reg Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[200px]">Player</th>
+                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[140px]">Registration ID</th>
+                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[120px]">Role</th>
+                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[150px]">Mobile & City</th>
+                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[180px]">Batting / Bowling</th>
+                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[130px]">Payment</th>
+                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[120px]">Reg Status</th>
+                    <th className="py-3.5 px-4 text-right whitespace-nowrap min-w-[190px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {players.map(player => (
                     <tr key={player.id} className="hover:bg-gray-50/70 transition-colors">
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <img
                             src={
@@ -375,69 +410,75 @@ export default function PlayersAdminPage() {
                               'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'
                             }
                             alt={player.full_name}
-                            className="w-9 h-9 rounded-lg object-cover border border-gray-200"
+                            className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0"
                           />
                           <div>
-                            <span className="font-bold text-sm text-brand-dark block">{player.full_name}</span>
-                            <span className="text-[11px] text-brand-muted">{player.email}</span>
+                            <span className="font-bold text-sm text-brand-dark block whitespace-nowrap">{player.full_name}</span>
+                            <span className="text-[11px] text-brand-muted block whitespace-nowrap">{player.email}</span>
                           </div>
                         </div>
                       </td>
 
-                      <td className="py-3 px-4 font-mono font-semibold text-primary-green">
+                      <td className="py-3 px-4 font-mono font-bold text-primary-green whitespace-nowrap">
                         {player.registration_id}
                       </td>
 
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-light-green text-primary-green border border-primary-green/20 capitalize">
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-light-green text-primary-green border border-primary-green/20 capitalize">
                           {player.playing_role.replace('_', ' ')}
                         </span>
                       </td>
 
-                      <td className="py-3 px-4">
-                        <span className="text-brand-dark font-medium block">{player.mobile}</span>
-                        <span className="text-[11px] text-brand-muted">{player.city}</span>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className="text-brand-dark font-medium block whitespace-nowrap">{player.mobile}</span>
+                        <span className="text-[11px] text-brand-muted block">{player.city}</span>
                       </td>
 
-                      <td className="py-3 px-4 capitalize font-medium text-brand-dark">
-                        <div>{player.batting_style.replace('_', ' ')}</div>
-                        <div className="text-[11px] text-brand-muted">{player.bowling_arm.replace('_', ' ')} • {player.bowling_type.replace('_', ' ')}</div>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <div className="font-semibold text-brand-dark">
+                          {player.batting_style === 'right_hand' ? 'Right Hand Bat' : 'Left Hand Bat'}
+                        </div>
+                        <div className="text-[11px] text-brand-muted mt-0.5">
+                          {player.bowling_arm === 'do_not_bowl'
+                            ? 'Do not bowl'
+                            : `${player.bowling_arm === 'right_arm' ? 'Right Arm' : 'Left Arm'} • ${player.bowling_type.replace('_', ' ')}`}
+                        </div>
                       </td>
 
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         {player.payment?.payment_status === 'verified' ? (
-                          <span className="inline-flex items-center gap-1 text-green-700 font-semibold">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Verified
                           </span>
                         ) : player.payment?.payment_status === 'rejected' ? (
-                          <span className="inline-flex items-center gap-1 text-red-600 font-semibold">
-                            <XCircle className="w-3.5 h-3.5" /> Rejected
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+                            <XCircle className="w-3.5 h-3.5 text-red-600" /> Rejected
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-amber-600 font-semibold">
-                            <Clock className="w-3.5 h-3.5" /> Pending
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" /> Pending
                           </span>
                         )}
                       </td>
 
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold capitalize ${
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${
                             player.registration_status === 'approved'
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-green-100 text-green-800 border border-green-200'
                               : player.registration_status === 'rejected'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-gray-100 text-brand-dark'
+                              ? 'bg-red-100 text-red-800 border border-red-200'
+                              : 'bg-gray-100 text-brand-dark border border-gray-200'
                           }`}
                         >
                           {player.registration_status.replace('_', ' ')}
                         </span>
                       </td>
 
-                      <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                      <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap min-w-[190px]">
                         <button
                           onClick={() => setSelectedPlayer(player)}
-                          className="px-2.5 py-1.5 rounded-lg border border-brand-border bg-white hover:bg-gray-50 text-brand-dark font-semibold text-xs transition-colors"
+                          className="px-2.5 py-1.5 rounded-lg border border-brand-border bg-white hover:bg-gray-50 text-brand-dark font-semibold text-xs transition-colors shadow-xs"
                         >
                           View
                         </button>
@@ -445,7 +486,7 @@ export default function PlayersAdminPage() {
                           <button
                             onClick={() => handleApprove(player.id)}
                             disabled={actionLoading}
-                            className="px-2.5 py-1.5 rounded-lg bg-primary-green hover:bg-primary-dark text-white font-semibold text-xs transition-colors"
+                            className="px-3 py-1.5 rounded-lg bg-primary-green hover:bg-primary-dark text-white font-semibold text-xs transition-colors shadow-xs"
                           >
                             Approve
                           </button>
