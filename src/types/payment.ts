@@ -18,3 +18,4 @@ export interface PaymentWithPlayer extends PaymentRow {
     profile_photo_path: string | null;
   };
 }
+

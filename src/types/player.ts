@@ -24,3 +24,4 @@ export interface PlayerWithPayment extends PlayerRow {
     verified_at: string | null;
   } | null;
 }
+

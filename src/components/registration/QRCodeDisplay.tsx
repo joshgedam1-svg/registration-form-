@@ -49,3 +49,4 @@ export default function QRCodeDisplay({ upiId, amount, tournamentName = 'Cricket
     </div>
   );
 }
+

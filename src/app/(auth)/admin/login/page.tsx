@@ -1,20 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('admin@cricketauctionleague.com');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
     setError(null);
 
@@ -29,21 +27,20 @@ export default function AdminLoginPage() {
         if (authError) {
           throw new Error(authError.message);
         }
-      } else {
-        // Mock authentication check for development/demo
-        if (!email.includes('@') || password.length < 4) {
-          throw new Error('Please enter a valid email and password');
-        }
-        // Set mock admin cookie / session
-        document.cookie = 'cal_admin_session=true; path=/; max-age=86400';
       }
 
-      router.push('/admin/dashboard');
+      // Set cookie and navigate cleanly
+      document.cookie = 'cal_admin_session=true; path=/; max-age=604800; SameSite=Lax';
+      window.location.href = '/admin/dashboard';
     } catch (err: any) {
       setError(err.message || 'Invalid email or password');
-    } finally {
       setLoading(false);
     }
+  };
+
+  const handleInstantDemoLogin = () => {
+    document.cookie = 'cal_admin_session=true; path=/; max-age=604800; SameSite=Lax';
+    window.location.href = '/admin/dashboard';
   };
 
   return (
@@ -51,12 +48,12 @@ export default function AdminLoginPage() {
       <div className="w-full max-w-md bg-white border border-brand-border rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-light-green text-primary-green border border-primary-green/20 flex items-center justify-center mx-auto shadow-sm">
-            <ShieldCheck className="w-7 h-7" />
+          <div className="w-14 h-14 rounded-2xl bg-light-green text-primary-green border border-primary-green/20 flex items-center justify-center mx-auto shadow-sm">
+            <ShieldCheck className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold text-brand-dark tracking-tight">Admin Authentication</h1>
           <p className="text-xs sm:text-sm text-brand-muted">
-            Secure tournament committee & verification terminal
+            Official Cricket Auction League committee & verification portal
           </p>
         </div>
 
@@ -67,7 +64,26 @@ export default function AdminLoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        {/* 1-Click Instant Demo Login Banner */}
+        <div className="p-4 bg-light-green/70 border border-primary-green/30 rounded-xl space-y-2">
+          <div className="flex items-center gap-2 text-primary-green font-bold text-xs uppercase tracking-wider">
+            <Sparkles className="w-4 h-4" />
+            <span>Quick Admin Access</span>
+          </div>
+          <p className="text-xs text-brand-dark">
+            Click below for instant one-click access into the Tournament Admin Dashboard.
+          </p>
+          <button
+            type="button"
+            onClick={handleInstantDemoLogin}
+            className="w-full h-10 rounded-lg bg-primary-green hover:bg-primary-dark text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-xs"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Enter Admin Portal (1-Click)</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-4 pt-1">
           <div>
             <label className="block text-xs font-semibold text-brand-dark mb-1">
               Admin Email Address
@@ -105,22 +121,12 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-11 rounded-lg bg-primary-green hover:bg-primary-dark text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-70 mt-2"
+            className="w-full h-11 rounded-lg border border-brand-border bg-white hover:bg-gray-50 text-brand-dark font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-70"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-            <span>Sign In to Admin Panel</span>
+            {loading ? <Loader2 className="w-4 h-4 animate-spin text-primary-green" /> : <ShieldCheck className="w-4 h-4 text-primary-green" />}
+            <span>Sign In with Password</span>
           </button>
         </form>
-
-        {/* Demo credentials helper */}
-        <div className="p-3 bg-gray-50 border border-brand-border rounded-xl text-center space-y-1">
-          <span className="text-[11px] font-semibold text-primary-green uppercase tracking-wider block">
-            Demo Administrator Access
-          </span>
-          <p className="text-xs text-brand-muted font-mono">
-            admin@cricketauctionleague.com / admin123
-          </p>
-        </div>
 
         <div className="text-center pt-1">
           <Link

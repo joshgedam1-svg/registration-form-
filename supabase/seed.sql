@@ -207,3 +207,4 @@ INSERT INTO payments (
   NULL
 )
 ON CONFLICT (id) DO NOTHING;
+

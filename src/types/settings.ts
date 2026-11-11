@@ -13,3 +13,4 @@ export interface PublicTournamentSettings {
   registration_open: boolean;
   registration_instructions: string | null;
 }
+

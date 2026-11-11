@@ -2,19 +2,15 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   registrationSchema,
-  RegistrationFormData,
-  playingRoles,
-  battingStyles,
-  bowlingArms,
-  bowlingTypes,
-  experienceLevels
+  RegistrationFormData
 } from '@/lib/validations/registration';
 import { PublicTournamentSettings } from '@/types/settings';
 import QRCodeDisplay from './QRCodeDisplay';
+import { BatIcon, BallIcon, AllRounderIcon, KeeperIcon } from './CricketIcons';
 import {
   ShieldCheck,
   Upload,
@@ -23,16 +19,9 @@ import {
   Copy,
   Check,
   Trash2,
-  RefreshCw,
   Send,
-  User,
-  Activity,
-  Award,
-  PhoneCall,
-  CreditCard,
-  FileCheck2,
-  Lock,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
 
 interface RegistrationFormProps {
@@ -57,7 +46,6 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
   const {
     register,
     handleSubmit,
-    control,
     setValue,
     watch,
     formState: { errors }
@@ -133,7 +121,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       } else {
         alert(result.error || 'Failed to upload photo');
       }
-    } catch (err) {
+    } catch {
       alert('Photo upload failed. Please try again.');
     } finally {
       setUploadingPhoto(false);
@@ -173,7 +161,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       } else {
         alert(result.error || 'Failed to upload screenshot');
       }
-    } catch (err) {
+    } catch {
       alert('Screenshot upload failed');
     } finally {
       setUploadingScreenshot(false);
@@ -243,18 +231,18 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-3xl mx-auto pb-16">
       {/* Header Banner */}
-      <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-sm">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-light-green text-primary-green text-xs font-semibold mb-3 border border-primary-green/20">
+      <div className="bg-white border border-brand-border rounded-2xl p-6 sm:p-7 shadow-xs space-y-2.5">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-light-green text-primary-green text-xs font-semibold border border-primary-green/20">
           <ShieldCheck className="w-4 h-4" />
           <span>Registration Fee: ₹{settings.registration_fee} • Strict League Verification</span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-brand-dark tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-dark tracking-tight">
           {settings.tournament_name}
         </h1>
-        <p className="text-primary-green font-semibold text-sm sm:text-base mt-1">
+        <p className="text-primary-green font-bold text-sm sm:text-base">
           Official Player Registration Portal
         </p>
-        <p className="text-brand-muted text-xs sm:text-sm mt-1">
+        <p className="text-brand-muted text-xs sm:text-sm leading-relaxed pt-0.5">
           Complete your profile, submit emergency contacts, and confirm your ₹{settings.registration_fee} UPI payment to enter the tournament docket.
         </p>
       </div>
@@ -273,9 +261,9 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       {/* ============================================================================== */}
       {/* SECTION 1: PERSONAL DETAILS */}
       {/* ============================================================================== */}
-      <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2.5 pb-2 border-b border-gray-100">
-          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs">
+      <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-4">
+        <div className="flex items-center gap-2.5 pb-2.5 border-b border-gray-100">
+          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
             1
           </div>
           <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
@@ -283,7 +271,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
           </h2>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 pt-1">
           {/* Full Name */}
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-1">
@@ -452,9 +440,9 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       {/* ============================================================================== */}
       {/* SECTION 2: CRICKET PROFILE */}
       {/* ============================================================================== */}
-      <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-sm space-y-5">
-        <div className="flex items-center gap-2.5 pb-2 border-b border-gray-100">
-          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs">
+      <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-5">
+        <div className="flex items-center gap-2.5 pb-2.5 border-b border-gray-100">
+          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
             2
           </div>
           <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
@@ -462,38 +450,80 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
           </h2>
         </div>
 
-        {/* Playing Role Cards */}
+        {/* Playing Role Cards - Designed with Cricket Icons & Selection Checkmark */}
         <div>
-          <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-2">
+          <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-2.5">
             Playing Role <span className="text-red-500">*</span>
           </label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { id: 'batsman', label: 'Batsman', desc: 'Top/Middle order' },
-              { id: 'bowler', label: 'Bowler', desc: 'Pace or spin weapon' },
-              { id: 'all_rounder', label: 'All-Rounder', desc: 'Bat & bowl capability' },
-              { id: 'wicketkeeper', label: 'Wicketkeeper', desc: 'Glovework & bat' }
+              {
+                id: 'batsman',
+                label: 'Batsman',
+                desc: 'Top/Middle order specialist',
+                icon: BatIcon
+              },
+              {
+                id: 'bowler',
+                label: 'Bowler',
+                desc: 'Pace or spin strike weapon',
+                icon: BallIcon
+              },
+              {
+                id: 'all_rounder',
+                label: 'All-Rounder',
+                desc: 'Dual capability asset',
+                icon: AllRounderIcon
+              },
+              {
+                id: 'wicketkeeper',
+                label: 'Wicketkeeper',
+                desc: 'Glovework & top/finisher bat',
+                icon: KeeperIcon
+              }
             ].map(role => {
               const isSelected = selectedRole === role.id;
+              const IconComp = role.icon;
               return (
-                <button
+                <div
                   key={role.id}
-                  type="button"
                   onClick={() => setValue('playing_role', role.id as any, { shouldValidate: true })}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                  className={`p-3.5 rounded-xl cursor-pointer transition-all flex flex-col justify-between min-h-[105px] border ${
                     isSelected
-                      ? 'bg-light-green border-primary-green ring-1 ring-primary-green'
-                      : 'bg-white border-brand-border hover:bg-gray-50'
+                      ? 'bg-light-green border-primary-green shadow-xs ring-1 ring-primary-green'
+                      : 'bg-white border-brand-border hover:bg-gray-50/80 hover:border-gray-300'
                   }`}
+                  role="button"
+                  tabIndex={0}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-brand-dark">
-                      {role.label}
-                    </span>
-                    {isSelected && <CheckCircle2 className="w-4 h-4 text-primary-green" />}
+                  <div className="flex items-center justify-between">
+                    <div
+                      className={`p-1.5 rounded-lg ${
+                        isSelected ? 'bg-primary-green text-white' : 'bg-gray-100 text-brand-muted'
+                      }`}
+                    >
+                      <IconComp className="w-5 h-5" />
+                    </div>
+                    {isSelected ? (
+                      <CheckCircle2 className="w-5 h-5 text-primary-green fill-primary-green/10" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border border-gray-300" />
+                    )}
                   </div>
-                  <span className="text-[11px] text-brand-muted">{role.desc}</span>
-                </button>
+
+                  <div className="mt-2.5">
+                    <p
+                      className={`text-sm font-bold leading-tight ${
+                        isSelected ? 'text-primary-green' : 'text-brand-dark'
+                      }`}
+                    >
+                      {role.label}
+                    </p>
+                    <p className="text-[11px] text-brand-muted leading-tight mt-0.5">
+                      {role.desc}
+                    </p>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -520,7 +550,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
                   onClick={() => setValue('batting_style', item.id as any, { shouldValidate: true })}
                   className={`px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                     active
-                      ? 'bg-primary-green text-white shadow-sm'
+                      ? 'bg-primary-green text-white shadow-xs'
                       : 'bg-gray-100 text-brand-dark hover:bg-gray-200'
                   }`}
                 >
@@ -550,7 +580,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
                   onClick={() => setValue('bowling_arm', item.id as any, { shouldValidate: true })}
                   className={`px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                     active
-                      ? 'bg-primary-green text-white shadow-sm'
+                      ? 'bg-primary-green text-white shadow-xs'
                       : 'bg-gray-100 text-brand-dark hover:bg-gray-200'
                   }`}
                 >
@@ -582,7 +612,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
                     onClick={() => setValue('bowling_type', item.id as any, { shouldValidate: true })}
                     className={`px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-colors ${
                       active
-                        ? 'bg-primary-green text-white shadow-sm'
+                        ? 'bg-primary-green text-white shadow-xs'
                         : 'bg-gray-100 text-brand-dark hover:bg-gray-200'
                     }`}
                   >
@@ -598,9 +628,9 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       {/* ============================================================================== */}
       {/* SECTION 3: CRICKET EXPERIENCE */}
       {/* ============================================================================== */}
-      <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2.5 pb-2 border-b border-gray-100">
-          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs">
+      <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-4">
+        <div className="flex items-center gap-2.5 pb-2.5 border-b border-gray-100">
+          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
             3
           </div>
           <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
@@ -628,7 +658,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
                   onClick={() => setValue('experience_level', item.id as any, { shouldValidate: true })}
                   className={`py-2 px-3 text-center rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                     active
-                      ? 'bg-primary-green text-white shadow-sm'
+                      ? 'bg-primary-green text-white shadow-xs'
                       : 'bg-gray-100 text-brand-dark hover:bg-gray-200'
                   }`}
                 >
@@ -724,9 +754,9 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       {/* ============================================================================== */}
       {/* SECTION 4: EMERGENCY CONTACT */}
       {/* ============================================================================== */}
-      <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2.5 pb-2 border-b border-gray-100">
-          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs">
+      <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-4">
+        <div className="flex items-center gap-2.5 pb-2.5 border-b border-gray-100">
+          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
             4
           </div>
           <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
@@ -734,7 +764,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-brand-dark mb-1">
               Contact Name <span className="text-red-500">*</span>
@@ -791,17 +821,17 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       {/* ============================================================================== */}
       {/* SECTION 5: REGISTRATION PAYMENT (₹500 UPI) */}
       {/* ============================================================================== */}
-      <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-sm space-y-5">
-        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+      <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-5">
+        <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs">
+            <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
               5
             </div>
             <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
               Registration Payment
             </h2>
           </div>
-          <span className="px-3 py-1 rounded-full bg-light-green text-primary-green font-bold text-sm border border-primary-green/20">
+          <span className="px-3.5 py-1 rounded-full bg-light-green text-primary-green font-bold text-sm border border-primary-green/20">
             ₹{settings.registration_fee}
           </span>
         </div>
@@ -885,7 +915,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
               Payment Screenshot Receipt <span className="text-red-500">*</span>
             </label>
             {screenshotPreview ? (
-              <div className="p-3 bg-white border border-brand-border rounded-xl flex items-center justify-between gap-3 shadow-sm">
+              <div className="p-3 bg-white border border-brand-border rounded-xl flex items-center justify-between gap-3 shadow-xs">
                 <div className="flex items-center gap-3 min-w-0">
                   <img
                     src={screenshotPreview}
@@ -937,7 +967,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
           </div>
 
           {/* Verification Warning Notice */}
-          <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2.5">
+          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-700" />
             <p className="text-xs leading-relaxed">
               <strong>Mandatory Notice:</strong> Uploading a screenshot does not automatically confirm payment or registration. All submissions are manually verified against bank ledger records by tournament administrators. Any falsified or reused UTR will result in disqualification.
@@ -949,9 +979,9 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
       {/* ============================================================================== */}
       {/* SECTION 6: DECLARATION */}
       {/* ============================================================================== */}
-      <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-sm space-y-3">
-        <div className="flex items-center gap-2.5 pb-2 border-b border-gray-100">
-          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs">
+      <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-7 shadow-xs space-y-3">
+        <div className="flex items-center gap-2.5 pb-2.5 border-b border-gray-100">
+          <div className="w-7 h-7 rounded-full bg-primary-green text-white flex items-center justify-center font-bold text-xs shadow-xs">
             6
           </div>
           <h2 className="font-bold text-base text-brand-dark uppercase tracking-wide">
@@ -1011,7 +1041,7 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full h-12 rounded-xl bg-primary-green hover:bg-primary-dark text-white font-bold text-sm sm:text-base tracking-wider uppercase flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full h-12 rounded-xl bg-primary-green hover:bg-primary-dark text-white font-bold text-sm sm:text-base tracking-wider uppercase flex items-center justify-center gap-2 shadow-xs transition-all active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {submitting ? (
             <>

@@ -331,3 +331,4 @@ CREATE POLICY "Admins can view payment screenshots"
 CREATE POLICY "Public read player photos"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'player-photos');
+

@@ -17,30 +17,67 @@
   body {
     background-color: #F5F7FA;
     color: #17212B;
-    font-family: var(--font-poppins), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: 'Poppins', 'Work Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', 'Work Sans', sans-serif;
+    letter-spacing: -0.02em;
   }
 }
 
-/* Custom utility colors aligned with the Cricket Auction League brand guidelines */
-.bg-canvas { background-color: #F5F7FA; }
-.bg-card-surface { background-color: #FFFFFF; }
-.bg-primary-green { background-color: #176B45; }
-.bg-primary-dark { background-color: #0F482E; }
-.bg-secondary-green { background-color: #237A57; }
-.bg-light-green { background-color: #EAF5EE; }
+/* Custom brand colors aligned with the Cricket Auction League guidelines */
+.bg-canvas {
+  background-color: #F5F7FA;
+}
 
-.text-primary-green { color: #176B45; }
-.text-secondary-green { color: #237A57; }
-.text-brand-dark { color: #17212B; }
-.text-brand-muted { color: #64748B; }
+.bg-card-surface {
+  background-color: #FFFFFF;
+}
 
-.border-brand-border { border-color: #E2E8F0; }
+.bg-primary-green {
+  background-color: #176B45;
+}
+
+.bg-primary-dark {
+  background-color: #0F482E;
+}
+
+.bg-secondary-green {
+  background-color: #237A57;
+}
+
+.bg-light-green {
+  background-color: #EAF5EE;
+}
+
+.text-primary-green {
+  color: #176B45;
+}
+
+.text-secondary-green {
+  color: #237A57;
+}
+
+.text-brand-dark {
+  color: #17212B;
+}
+
+.text-brand-muted {
+  color: #64748B;
+}
+
+.border-brand-border {
+  border-color: #E2E8F0;
+}
 
 /* Custom clean focus ring */
 .focus-ring {
   outline: none;
 }
+
 .focus-ring:focus {
   border-color: #176B45;
   box-shadow: 0 0 0 3px rgba(23, 107, 69, 0.15);
