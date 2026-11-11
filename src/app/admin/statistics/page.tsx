@@ -75,13 +75,6 @@ export default function StatisticsAdminPage() {
     not_applicable: verifiedPlayers.filter(p => p.bowling_type === 'not_applicable').length
   };
 
-  const experienceStats = {
-    beginner: verifiedPlayers.filter(p => p.experience_level === 'beginner').length,
-    '1_2_years': verifiedPlayers.filter(p => p.experience_level === '1_2_years').length,
-    '3_5_years': verifiedPlayers.filter(p => p.experience_level === '3_5_years').length,
-    '5_plus_years': verifiedPlayers.filter(p => p.experience_level === '5_plus_years').length
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -136,7 +129,7 @@ export default function StatisticsAdminPage() {
       </div>
 
       {/* Grid of Breakdowns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {/* Batting Hand Distribution */}
         <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-gray-100">
@@ -209,36 +202,6 @@ export default function StatisticsAdminPage() {
             ].map(item => {
               const bowlersCount = verifiedCount - bowlingArmStats.do_not_bowl;
               const pct = bowlersCount > 0 ? Math.round((item.count / bowlersCount) * 100) : 0;
-              return (
-                <div key={item.label} className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="font-semibold text-brand-dark">{item.label}</span>
-                    <span className="font-mono text-brand-muted">{item.count} ({pct}%)</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div className={`${item.color} h-full rounded-full`} style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Experience Brackets */}
-        <div className="bg-white border border-brand-border rounded-xl p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-            <h3 className="font-bold text-sm text-brand-dark">Experience Tiers</h3>
-            <span className="text-xs text-brand-muted">Years of Competitive Play</span>
-          </div>
-
-          <div className="space-y-3">
-            {[
-              { label: 'Beginner', count: experienceStats.beginner, color: 'bg-gray-400' },
-              { label: '1–2 Years', count: experienceStats['1_2_years'], color: 'bg-lime-600' },
-              { label: '3–5 Years', count: experienceStats['3_5_years'], color: 'bg-emerald-600' },
-              { label: '5+ Years (Veteran)', count: experienceStats['5_plus_years'], color: 'bg-primary-green' }
-            ].map(item => {
-              const pct = verifiedCount > 0 ? Math.round((item.count / verifiedCount) * 100) : 0;
               return (
                 <div key={item.label} className="space-y-1">
                   <div className="flex justify-between text-xs">

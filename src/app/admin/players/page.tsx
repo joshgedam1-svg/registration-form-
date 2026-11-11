@@ -300,9 +300,9 @@ export default function PlayersAdminPage() {
                     <span className="font-medium text-brand-dark">{player.city}</span>
                   </div>
                   <div>
-                    <span className="text-brand-muted block">Experience:</span>
+                    <span className="text-brand-muted block">Bat / Bowl:</span>
                     <span className="font-medium text-brand-dark capitalize">
-                      {player.experience_level.replace('_', ' ')}
+                      {player.batting_style.replace('_', ' ')} • {player.bowling_arm.replace('_', ' ')}
                     </span>
                   </div>
                   <div>
@@ -358,7 +358,7 @@ export default function PlayersAdminPage() {
                     <th className="py-3 px-4">Registration ID</th>
                     <th className="py-3 px-4">Role</th>
                     <th className="py-3 px-4">Mobile & City</th>
-                    <th className="py-3 px-4">Experience</th>
+                    <th className="py-3 px-4">Batting / Bowling</th>
                     <th className="py-3 px-4">Payment</th>
                     <th className="py-3 px-4">Reg Status</th>
                     <th className="py-3 px-4 text-right">Actions</th>
@@ -400,7 +400,8 @@ export default function PlayersAdminPage() {
                       </td>
 
                       <td className="py-3 px-4 capitalize font-medium text-brand-dark">
-                        {player.experience_level.replace('_', ' ')}
+                        <div>{player.batting_style.replace('_', ' ')}</div>
+                        <div className="text-[11px] text-brand-muted">{player.bowling_arm.replace('_', ' ')} • {player.bowling_type.replace('_', ' ')}</div>
                       </td>
 
                       <td className="py-3 px-4">
@@ -528,9 +529,9 @@ export default function PlayersAdminPage() {
               {/* Cricket Technical Profile */}
               <div className="space-y-2">
                 <h4 className="font-bold text-xs uppercase tracking-wider text-primary-green">
-                  Cricket Capabilities & Experience
+                  Cricket Technical Profile
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
                     <span className="text-[11px] text-brand-muted block">Batting Style</span>
                     <span className="font-semibold text-brand-dark capitalize">
@@ -549,34 +550,34 @@ export default function PlayersAdminPage() {
                       {selectedPlayer.bowling_type.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-[11px] text-brand-muted block">Experience</span>
-                    <span className="font-semibold text-brand-dark capitalize">
-                      {selectedPlayer.experience_level.replace('_', ' ')}
-                    </span>
-                  </div>
                 </div>
 
-                {/* Prior League Record */}
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-brand-muted">Previous Club / Team:</span>
-                    <span className="font-medium text-brand-dark">
-                      {selectedPlayer.previous_team_name || 'N/A'} (Capt: {selectedPlayer.previous_captain_name || 'N/A'})
-                    </span>
+                {/* Prior League Record (shown only if provided) */}
+                {(selectedPlayer.previous_team_name || selectedPlayer.previous_tournament_name || selectedPlayer.additional_information) && (
+                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1.5">
+                    {selectedPlayer.previous_team_name && (
+                      <div className="flex justify-between">
+                        <span className="text-brand-muted">Previous Club / Team:</span>
+                        <span className="font-medium text-brand-dark">
+                          {selectedPlayer.previous_team_name} {selectedPlayer.previous_captain_name ? `(Capt: ${selectedPlayer.previous_captain_name})` : ''}
+                        </span>
+                      </div>
+                    )}
+                    {selectedPlayer.previous_tournament_name && (
+                      <div className="flex justify-between">
+                        <span className="text-brand-muted">Prior Tournament:</span>
+                        <span className="font-medium text-brand-dark">
+                          {selectedPlayer.previous_tournament_name}
+                        </span>
+                      </div>
+                    )}
+                    {selectedPlayer.additional_information && (
+                      <div className="pt-1 text-[11px] text-brand-muted">
+                        <strong>Remarks / Accolades:</strong> {selectedPlayer.additional_information}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-brand-muted">Prior Tournament:</span>
-                    <span className="font-medium text-brand-dark">
-                      {selectedPlayer.previous_tournament_name || (selectedPlayer.previous_tournament ? 'Yes' : 'No')}
-                    </span>
-                  </div>
-                  {selectedPlayer.additional_information && (
-                    <div className="pt-1 text-[11px] text-brand-muted">
-                      <strong>Remarks / Accolades:</strong> {selectedPlayer.additional_information}
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
 
               {/* Emergency Contact */}
