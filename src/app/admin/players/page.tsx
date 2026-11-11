@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Search,
   Filter,
@@ -26,19 +26,57 @@ import {
   ShieldAlert,
   UserPlus,
   CheckSquare,
-  Square
+  Square,
+  Users,
+  CreditCard,
+  Bell,
+  Sparkles,
+  ArrowUpRight,
+  ShieldCheck,
+  Receipt
 } from 'lucide-react';
 import { PlayerWithPayment } from '@/types/player';
 import { formatDate } from '@/lib/utils/format';
 
+interface CreatePlayerFormState {
+  full_name: string;
+  email: string;
+  mobile: string;
+  date_of_birth: string;
+  city: string;
+  address: string;
+  playing_role: 'batsman' | 'bowler' | 'all_rounder' | 'wicketkeeper';
+  batting_style: 'right_hand' | 'left_hand';
+  bowling_arm: 'right_arm' | 'left_arm' | 'do_not_bowl';
+  bowling_type: 'fast' | 'medium' | 'spin' | 'not_applicable';
+  payment_status: 'verified' | 'pending_verification';
+  amount: number;
+  utr_number: string;
+}
+
+interface EditPlayerFormState {
+  full_name: string;
+  email: string;
+  mobile: string;
+  city: string;
+  address: string;
+  playing_role: 'batsman' | 'bowler' | 'all_rounder' | 'wicketkeeper';
+  batting_style: 'right_hand' | 'left_hand';
+  bowling_arm: 'right_arm' | 'left_arm' | 'do_not_bowl';
+  bowling_type: 'fast' | 'medium' | 'spin' | 'not_applicable';
+  registration_status: 'under_review' | 'approved' | 'rejected';
+}
+
 export default function PlayersAdminPage() {
-  const [players, setPlayers] = useState<PlayerWithPayment[]>([]);
+  const [allPlayers, setAllPlayers] = useState<PlayerWithPayment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerWithPayment | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [newSubmissionsFeedOpen, setNewSubmissionsFeedOpen] = useState(true);
 
   // Multi-Selection State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -55,8 +93,16 @@ export default function PlayersAdminPage() {
   const [rejectingPlayer, setRejectingPlayer] = useState<PlayerWithPayment | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  // Add Player Form State
-  const [addForm, setAddForm] = useState({
+  // Receipt Inspection Modal
+  const [inspectingPayment, setInspectingPayment] = useState<{
+    player: PlayerWithPayment;
+    screenshotUrl: string;
+    utr: string;
+    amount: number;
+  } | null>(null);
+
+  // Form States
+  const [addForm, setAddForm] = useState<CreatePlayerFormState>({
     full_name: '',
     email: '',
     mobile: '',
@@ -72,8 +118,7 @@ export default function PlayersAdminPage() {
     utr_number: ''
   });
 
-  // Edit Player Form State
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<EditPlayerFormState>({
     full_name: '',
     email: '',
     mobile: '',
@@ -86,55 +131,134 @@ export default function PlayersAdminPage() {
     registration_status: 'approved'
   });
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  // Track known IDs for detecting live new registrations
+  const knownPlayerIdsRef = useRef<Set<string>>(new Set());
+  const isInitialLoadRef = useRef(true);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastMessage({ type, message });
-    setTimeout(() => setToastMessage(null), 4000);
+    setTimeout(() => setToastMessage(null), 5000);
   };
 
-  const fetchPlayers = async () => {
-    setLoading(true);
+  // Master fetch: loads all players without filter so counts & stats are always 100% accurate
+  const fetchAllPlayers = async (isBackground = false) => {
+    if (!isBackground) setRefreshing(true);
     try {
-      let url = '/api/admin/players';
-      const params = new URLSearchParams();
-
-      if (activeFilter === 'verified' || activeFilter === 'pending' || activeFilter === 'rejected') {
-        params.append('status', activeFilter);
-      } else if (['batsman', 'bowler', 'all_rounder', 'wicketkeeper'].includes(activeFilter)) {
-        params.append('role', activeFilter);
-      }
-
-      if (search.trim()) {
-        params.append('search', search.trim());
-      }
-
-      const queryString = params.toString();
-      if (queryString) url += `?${queryString}`;
-
-      const res = await fetch(url);
+      const res = await fetch('/api/admin/players', { cache: 'no-store' });
       const json = await res.json();
-      if (json.success && json.data) {
-        setPlayers(json.data);
+      if (json.success && Array.isArray(json.data)) {
+        const incoming: PlayerWithPayment[] = json.data;
+
+        // Detect new registrations if not initial load
+        if (!isInitialLoadRef.current && isBackground) {
+          const newPlayers = incoming.filter(p => !knownPlayerIdsRef.current.has(p.id));
+          if (newPlayers.length > 0) {
+            const latest = newPlayers[0];
+            showToast(
+              `🔔 New Player Registered: ${latest.full_name} submitted ₹${latest.payment?.amount || 500} payment (UTR: ${latest.payment?.utr_number || 'N/A'})!`,
+              'info'
+            );
+          }
+        }
+
+        // Update known IDs
+        knownPlayerIdsRef.current = new Set(incoming.map(p => p.id));
+        isInitialLoadRef.current = false;
+        setAllPlayers(incoming);
       }
     } catch (err) {
       console.error('Failed to load players:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      fetchPlayers();
-    }, 250);
-    return () => clearTimeout(timeout);
-  }, [activeFilter, search]);
+    fetchAllPlayers(false);
+
+    // Auto-polling every 15 seconds to detect live new registrations
+    const interval = setInterval(() => {
+      fetchAllPlayers(true);
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Compute live executive metrics
+  const stats = useMemo(() => {
+    const total = allPlayers.length;
+    const verified = allPlayers.filter(p => p.payment?.payment_status === 'verified').length;
+    const pending = allPlayers.filter(
+      p => p.payment?.payment_status === 'pending_verification'
+    ).length;
+    const rejected = allPlayers.filter(p => p.payment?.payment_status === 'rejected').length;
+    const batsmen = allPlayers.filter(p => p.playing_role === 'batsman').length;
+    const bowlers = allPlayers.filter(p => p.playing_role === 'bowler').length;
+    const allRounders = allPlayers.filter(p => p.playing_role === 'all_rounder').length;
+    const wicketkeepers = allPlayers.filter(p => p.playing_role === 'wicketkeeper').length;
+    const capacityMax = 100;
+    const fillPercent = Math.min(100, Math.round((verified / capacityMax) * 100));
+
+    return {
+      total,
+      verified,
+      pending,
+      rejected,
+      batsmen,
+      bowlers,
+      allRounders,
+      wicketkeepers,
+      capacityMax,
+      fillPercent
+    };
+  }, [allPlayers]);
+
+  // List of players pending payment verification
+  const pendingPaymentPlayers = useMemo(() => {
+    return allPlayers.filter(
+      p => p.payment?.payment_status === 'pending_verification'
+    );
+  }, [allPlayers]);
+
+  // Filtered displayed list
+  const displayedPlayers = useMemo(() => {
+    return allPlayers.filter(p => {
+      // 1. Role or payment status filter
+      if (activeFilter === 'verified' && p.payment?.payment_status !== 'verified') return false;
+      if (
+        activeFilter === 'pending' &&
+        p.payment?.payment_status !== 'pending_verification'
+      )
+        return false;
+      if (activeFilter === 'rejected' && p.payment?.payment_status !== 'rejected') return false;
+      if (['batsman', 'bowler', 'all_rounder', 'wicketkeeper'].includes(activeFilter) && p.playing_role !== activeFilter)
+        return false;
+
+      // 2. Search query filter
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const matchName = p.full_name.toLowerCase().includes(q);
+        const matchReg = p.registration_id.toLowerCase().includes(q);
+        const matchMobile = p.mobile.toLowerCase().includes(q);
+        const matchCity = p.city.toLowerCase().includes(q);
+        const matchUtr = p.payment?.utr_number?.toLowerCase().includes(q) || false;
+        if (!matchName && !matchReg && !matchMobile && !matchCity && !matchUtr) return false;
+      }
+
+      return true;
+    });
+  }, [allPlayers, activeFilter, search]);
 
   // Selection helpers
+  const isAllSelected =
+    displayedPlayers.length > 0 && displayedPlayers.every(p => selectedIds.has(p.id));
+
   const toggleSelectAll = () => {
-    if (selectedIds.size === players.length && players.length > 0) {
+    if (isAllSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(players.map(p => p.id)));
+      setSelectedIds(new Set(displayedPlayers.map(p => p.id)));
     }
   };
 
@@ -153,7 +277,7 @@ export default function PlayersAdminPage() {
   };
 
   // ==============================================================================
-  // CREATE (Add Player)
+  // ACTIONS: Create Player
   // ==============================================================================
   const handleAddPlayerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,7 +292,7 @@ export default function PlayersAdminPage() {
 
       const json = await res.json();
       if (res.ok && json.success) {
-        showToast(`Player ${addForm.full_name} added successfully!`);
+        showToast(`Player ${addForm.full_name} registered successfully!`);
         setIsAddModalOpen(false);
         setAddForm({
           full_name: '',
@@ -185,7 +309,7 @@ export default function PlayersAdminPage() {
           amount: 500,
           utr_number: ''
         });
-        fetchPlayers();
+        fetchAllPlayers(false);
       } else {
         alert(json.error || 'Failed to add player');
       }
@@ -197,7 +321,7 @@ export default function PlayersAdminPage() {
   };
 
   // ==============================================================================
-  // UPDATE (Edit Player)
+  // ACTIONS: Update Player
   // ==============================================================================
   const openEditModal = (player: PlayerWithPayment) => {
     setEditingPlayer(player);
@@ -211,7 +335,7 @@ export default function PlayersAdminPage() {
       batting_style: player.batting_style,
       bowling_arm: player.bowling_arm,
       bowling_type: player.bowling_type,
-      registration_status: player.registration_status
+      registration_status: player.registration_status as 'under_review' | 'approved' | 'rejected'
     });
   };
 
@@ -230,7 +354,7 @@ export default function PlayersAdminPage() {
       const json = await res.json();
       if (res.ok && json.success) {
         showToast(`Profile for ${editForm.full_name} updated successfully!`);
-        setPlayers(prev =>
+        setAllPlayers(prev =>
           prev.map(p => (p.id === editingPlayer.id ? ({ ...p, ...editForm } as PlayerWithPayment) : p))
         );
         if (selectedPlayer?.id === editingPlayer.id) {
@@ -248,7 +372,7 @@ export default function PlayersAdminPage() {
   };
 
   // ==============================================================================
-  // DELETE (Single Player)
+  // ACTIONS: Delete Single Player
   // ==============================================================================
   const handleDeleteSingle = async () => {
     if (!deletingPlayer) return;
@@ -258,16 +382,15 @@ export default function PlayersAdminPage() {
       const res = await fetch(`/api/admin/players/${deletingPlayer.id}`, {
         method: 'DELETE'
       });
-
       const json = await res.json();
       if (res.ok && json.success) {
         showToast(`Player ${deletingPlayer.full_name} deleted.`);
-        setPlayers(prev => prev.filter(p => p.id !== deletingPlayer.id));
-        if (selectedIds.has(deletingPlayer.id)) {
-          const next = new Set(selectedIds);
+        setAllPlayers(prev => prev.filter(p => p.id !== deletingPlayer.id));
+        setSelectedIds(prev => {
+          const next = new Set(prev);
           next.delete(deletingPlayer.id);
-          setSelectedIds(next);
-        }
+          return next;
+        });
         if (selectedPlayer?.id === deletingPlayer.id) {
           setSelectedPlayer(null);
         }
@@ -283,46 +406,46 @@ export default function PlayersAdminPage() {
   };
 
   // ==============================================================================
-  // BULK DELETE (Selected Players)
+  // ACTIONS: Bulk Delete Selected Players
   // ==============================================================================
   const handleDeleteSelected = async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
+    if (selectedIds.size === 0) return;
     setActionLoading(true);
 
     try {
+      const idsToDelete = Array.from(selectedIds);
       const res = await fetch('/api/admin/players', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids })
+        body: JSON.stringify({ ids: idsToDelete })
       });
 
       const json = await res.json();
       if (res.ok && json.success) {
-        showToast(`Successfully deleted ${ids.length} selected players.`);
-        setPlayers(prev => prev.filter(p => !selectedIds.has(p.id)));
+        showToast(`Deleted ${idsToDelete.length} players successfully.`);
+        setAllPlayers(prev => prev.filter(p => !selectedIds.has(p.id)));
         setSelectedIds(new Set());
         setIsDeleteSelectedModalOpen(false);
       } else {
         alert(json.error || 'Failed to delete selected players');
       }
     } catch (err) {
-      alert('Error during bulk deletion');
+      alert('Error deleting selected players');
     } finally {
       setActionLoading(false);
     }
   };
 
   // ==============================================================================
-  // DELETE ALL PLAYERS
+  // ACTIONS: Delete All Players
   // ==============================================================================
   const handleDeleteAll = async () => {
     if (deleteAllConfirmText !== 'DELETE ALL') {
       alert('Please type DELETE ALL exactly to confirm.');
       return;
     }
-    setActionLoading(true);
 
+    setActionLoading(true);
     try {
       const res = await fetch('/api/admin/players', {
         method: 'DELETE',
@@ -332,9 +455,10 @@ export default function PlayersAdminPage() {
 
       const json = await res.json();
       if (res.ok && json.success) {
-        showToast('All player registrations have been deleted.');
-        setPlayers([]);
+        showToast('All player records have been permanently cleared.');
+        setAllPlayers([]);
         setSelectedIds(new Set());
+        setSelectedPlayer(null);
         setIsDeleteAllModalOpen(false);
         setDeleteAllConfirmText('');
       } else {
@@ -342,6 +466,32 @@ export default function PlayersAdminPage() {
       }
     } catch (err) {
       alert('Error deleting all players');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ==============================================================================
+  // ACTIONS: Verify Payment & Approve Player (1-Click)
+  // ==============================================================================
+  const handleVerifyPaymentAndApprove = async (player: PlayerWithPayment) => {
+    setActionLoading(true);
+    try {
+      // 1. Verify Payment
+      if (player.payment?.id) {
+        await fetch(`/api/admin/payments/${player.payment.id}/verify`, { method: 'POST' });
+      }
+
+      // 2. Approve Registration
+      await fetch(`/api/admin/registrations/${player.id}/approve`, { method: 'POST' });
+
+      showToast(`✓ Payment verified & ${player.full_name} approved for tournament!`);
+      if (inspectingPayment?.player.id === player.id) {
+        setInspectingPayment(null);
+      }
+      fetchAllPlayers(false);
+    } catch (err) {
+      alert('Failed to verify payment and approve registration');
     } finally {
       setActionLoading(false);
     }
@@ -356,7 +506,7 @@ export default function PlayersAdminPage() {
       });
       const json = await res.json();
       if (json.success) {
-        setPlayers(prev =>
+        setAllPlayers(prev =>
           prev.map(p => (p.id === playerId ? { ...p, registration_status: 'approved', rejection_reason: null } : p))
         );
         if (selectedPlayer?.id === playerId) {
@@ -386,7 +536,7 @@ export default function PlayersAdminPage() {
       });
       const json = await res.json();
       if (json.success) {
-        setPlayers(prev =>
+        setAllPlayers(prev =>
           prev.map(p =>
             p.id === rejectingPlayer.id
               ? { ...p, registration_status: 'rejected', rejection_reason: rejectionReason.trim() }
@@ -425,7 +575,7 @@ export default function PlayersAdminPage() {
       'UTR',
       'Registration Status'
     ];
-    const rows = players.map(p => [
+    const rows = displayedPlayers.map(p => [
       p.registration_id,
       p.full_name,
       p.email,
@@ -452,83 +602,323 @@ export default function PlayersAdminPage() {
     document.body.removeChild(link);
   };
 
-  const isAllSelected = players.length > 0 && selectedIds.size === players.length;
-
   return (
-    <div className="space-y-6 pb-16">
-      {/* Toast Notification */}
+    <div className="space-y-4 max-w-7xl mx-auto pb-16">
+      {/* Toast Feedback Notification */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className={`p-4 rounded-xl shadow-lg border text-sm font-semibold flex items-center gap-2.5 ${
-            toastMessage.type === 'success'
-              ? 'bg-emerald-900 text-white border-emerald-700'
-              : 'bg-red-900 text-white border-red-700'
-          }`}>
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <div
+            className={`px-4 py-2.5 rounded-lg shadow-md border text-xs font-semibold flex items-center gap-2 ${
+              toastMessage.type === 'success'
+                ? 'bg-emerald-900 text-white border-emerald-700'
+                : toastMessage.type === 'info'
+                ? 'bg-blue-900 text-white border-blue-700'
+                : 'bg-red-900 text-white border-red-700'
+            }`}
+          >
+            {toastMessage.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+            {toastMessage.type === 'info' && <Bell className="w-4 h-4 text-blue-300 shrink-0" />}
+            {toastMessage.type === 'error' && <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />}
             <span>{toastMessage.message}</span>
           </div>
         </div>
       )}
 
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-brand-border rounded-2xl p-5 sm:p-6 shadow-xs">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-dark tracking-tight">
-            Player Roster & Management
-          </h1>
-          <p className="text-xs sm:text-sm text-brand-muted mt-0.5">
-            Full CRUD controls: create players, edit records, manage approvals, and bulk delete.
-          </p>
-        </div>
+      {/* ============================================================================== */}
+      {/* 1. PROFESSIONAL HEADER WITH TOTAL PLAYERS PILL & SLEEK ACTION BAR */}
+      {/* ============================================================================== */}
+      <div className="bg-white border border-slate-200/80 rounded-xl p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+                Player Roster & Management
+              </h1>
+              {/* Proper Total Players Badge */}
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+                <Users className="w-3 h-3 text-emerald-600" />
+                <span>{stats.total} Players Total</span>
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Comprehensive player directory, live payment receipt verification, and roster CRUD controls.
+            </p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Add Player Button */}
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary-green hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-xs active:scale-95"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Add New Player</span>
-          </button>
-
-          {/* Delete All Button */}
-          {players.length > 0 && (
+          {/* Compact Action Buttons - Perfectly aligned without wrapping awkwardly */}
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap">
+            {/* Add Player */}
             <button
-              onClick={() => setIsDeleteAllModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-all shadow-xs active:scale-95"
-              title="Delete all registered players"
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-1.5 h-8.5 px-3 rounded-lg bg-primary-green hover:bg-primary-dark text-white text-xs font-semibold transition-all shadow-2xs active:scale-95"
             >
-              <Trash2 className="w-3.5 h-3.5 text-red-600" />
-              <span>Delete All</span>
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Add Player</span>
             </button>
-          )}
 
-          <button
-            onClick={exportCSV}
-            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-brand-border text-xs font-semibold text-brand-dark transition-colors shadow-xs"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-primary-green" />
-            <span>Export CSV</span>
-          </button>
+            {/* Delete All (Emergency) */}
+            {allPlayers.length > 0 && (
+              <button
+                onClick={() => setIsDeleteAllModalOpen(true)}
+                className="inline-flex items-center gap-1.5 h-8.5 px-2.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold transition-all shadow-2xs active:scale-95"
+                title="Emergency wipeout with typed confirmation"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                <span>Delete All</span>
+              </button>
+            )}
 
-          <button
-            onClick={fetchPlayers}
-            className="p-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-brand-border text-brand-dark transition-colors shadow-xs"
-            title="Refresh list"
-          >
-            <RefreshCw className="w-4 h-4 text-primary-green" />
-          </button>
+            {/* Export CSV */}
+            <button
+              onClick={exportCSV}
+              className="inline-flex items-center gap-1.5 h-8.5 px-2.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700 transition-colors shadow-2xs"
+              title="Download player data as CSV"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Export CSV</span>
+            </button>
+
+            {/* Refresh */}
+            <button
+              onClick={() => fetchAllPlayers(false)}
+              disabled={refreshing}
+              className="h-8.5 w-8.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 flex items-center justify-center transition-colors shadow-2xs disabled:opacity-50"
+              title="Refresh player roster"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${refreshing ? 'animate-spin text-primary-green' : ''}`} />
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* ============================================================================== */}
+      {/* 2. EXECUTIVE KPI STATS CARDS (Displaying Total Players, Paid, Pending, Capacity) */}
+      {/* ============================================================================== */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Total Players Card */}
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3 sm:p-3.5 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              Total Players
+            </span>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-xl font-bold text-slate-900">{stats.total}</span>
+              <span className="text-[11px] text-slate-500 font-medium">Registered</span>
+            </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">
+              {stats.batsmen} Bat • {stats.bowlers} Bowl • {stats.allRounders} AR • {stats.wicketkeepers} WK
+            </span>
+          </div>
+          <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+            <Users className="w-4 h-4 text-primary-green" />
+          </div>
+        </div>
+
+        {/* Paid & Verified Card */}
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3 sm:p-3.5 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              Paid & Verified
+            </span>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-xl font-bold text-emerald-700">{stats.verified}</span>
+              <span className="text-[11px] text-emerald-600 font-medium">₹{stats.verified * 500}</span>
+            </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">
+              Confirmed tournament docket
+            </span>
+          </div>
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Pending Review Card (With Pulse Indicator) */}
+        <div
+          onClick={() => setActiveFilter('pending')}
+          className={`border rounded-xl p-3 sm:p-3.5 shadow-xs flex items-center justify-between transition-all cursor-pointer hover:shadow-sm ${
+            stats.pending > 0
+              ? 'bg-amber-50/60 border-amber-300 ring-1 ring-amber-200'
+              : 'bg-white border-slate-200/80'
+          }`}
+          title="Click to view pending payments"
+        >
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
+                Pending Review
+              </span>
+              {stats.pending > 0 && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+              )}
+            </div>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className={`text-xl font-bold ${stats.pending > 0 ? 'text-amber-800' : 'text-slate-900'}`}>
+                {stats.pending}
+              </span>
+              <span className="text-[11px] text-amber-700 font-medium">Need UTR check</span>
+            </div>
+            <span className="text-[10px] text-amber-600/80 block mt-0.5 font-medium">
+              {stats.pending > 0 ? 'Action required below' : 'All clear'}
+            </span>
+          </div>
+          <div
+            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+              stats.pending > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Tournament Capacity Card */}
+        <div className="bg-white border border-slate-200/80 rounded-xl p-3 sm:p-3.5 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+            <span>Quota Capacity</span>
+            <span className="text-slate-900 font-bold">{stats.fillPercent}%</span>
+          </div>
+          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden my-1">
+            <div
+              className="bg-primary-green h-full rounded-full transition-all duration-500"
+              style={{ width: `${stats.fillPercent}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-slate-500">
+            <span>{stats.verified} / {stats.capacityMax} Verified</span>
+            <span className="text-emerald-700 font-semibold">{stats.capacityMax - stats.verified} left</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================================================== */}
+      {/* 3. DEDICATED SECTION: NEW REGISTRATIONS & PAYMENT SUBMISSIONS (ACTION REQUIRED) */}
+      {/* ============================================================================== */}
+      {pendingPaymentPlayers.length > 0 ? (
+        <div className="bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-orange-50/30 border border-amber-300/80 rounded-xl p-4 shadow-xs space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-amber-200/60">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-600"></span>
+              </span>
+              <div>
+                <h2 className="text-xs sm:text-sm font-bold text-amber-950 flex items-center gap-1.5">
+                  <span>New Registrations with Pending Payment Verification</span>
+                  <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900">
+                    {pendingPaymentPlayers.length} Awaiting
+                  </span>
+                </h2>
+                <p className="text-[11px] text-amber-800/80">
+                  These players completed their registration and uploaded payment receipts. Review and approve with 1 click:
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setNewSubmissionsFeedOpen(!newSubmissionsFeedOpen)}
+              className="text-xs font-semibold text-amber-900 hover:text-amber-950 underline px-2 py-1"
+            >
+              {newSubmissionsFeedOpen ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+
+          {newSubmissionsFeedOpen && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              {pendingPaymentPlayers.map(p => (
+                <div
+                  key={p.id}
+                  className="bg-white border border-amber-200/90 rounded-xl p-3 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-amber-400 transition-colors"
+                >
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <img
+                      src={
+                        p.profile_photo_path ||
+                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'
+                      }
+                      alt={p.full_name}
+                      className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-xs text-slate-900 truncate">{p.full_name}</span>
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 capitalize">
+                          {p.playing_role.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-700 mt-0.5">
+                        <span className="font-bold">{p.registration_id}</span>
+                        <span className="text-slate-300">•</span>
+                        <span className="font-semibold text-slate-800">₹{p.payment?.amount || 500}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-0.5">
+                        <span className="font-mono text-slate-600">UTR: {p.payment?.utr_number || 'No UTR'}</span>
+                        <span className="text-slate-300">•</span>
+                        <span>{p.city}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions for this pending registration */}
+                  <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                    {/* View Receipt Screenshot */}
+                    {p.payment?.screenshot_path && (
+                      <button
+                        onClick={() =>
+                          setInspectingPayment({
+                            player: p,
+                            screenshotUrl: p.payment!.screenshot_path!,
+                            utr: p.payment?.utr_number || 'N/A',
+                            amount: p.payment?.amount || 500
+                          })
+                        }
+                        className="h-7.5 px-2 rounded-md bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium flex items-center gap-1"
+                        title="Inspect UPI payment screenshot"
+                      >
+                        <Receipt className="w-3 h-3 text-slate-500" />
+                        <span>Receipt</span>
+                      </button>
+                    )}
+
+                    {/* 1-Click Verify & Approve */}
+                    <button
+                      onClick={() => handleVerifyPaymentAndApprove(p)}
+                      disabled={actionLoading}
+                      className="h-7.5 px-2.5 rounded-md bg-primary-green hover:bg-primary-dark text-white text-xs font-semibold flex items-center gap-1 shadow-2xs transition-colors"
+                      title="Verify ₹500 payment and approve player immediately"
+                    >
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Verify & Approve</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Reassuring zero-pending status banner */
+        <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 flex items-center justify-between text-xs text-emerald-900 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-medium">
+              All payment submissions are verified. New athlete registrations will appear here automatically.
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-emerald-700 shrink-0 font-medium">Live Auto-Sync Active</span>
+        </div>
+      )}
+
       {/* Floating / Sticky Bulk Action Bar */}
       {selectedIds.size > 0 && (
-        <div className="sticky top-16 z-30 p-3.5 bg-brand-dark text-white rounded-2xl shadow-xl flex items-center justify-between gap-3 animate-in slide-in-from-top-2 duration-200 border border-white/10">
-          <div className="flex items-center gap-3">
-            <span className="w-7 h-7 rounded-lg bg-primary-green text-white font-bold text-xs flex items-center justify-center font-mono">
+        <div className="sticky top-16 z-30 p-3 bg-slate-900 text-white rounded-xl shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-top-2 duration-200 border border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <span className="w-6 h-6 rounded-md bg-primary-green text-white font-bold text-xs flex items-center justify-center font-mono">
               {selectedIds.size}
             </span>
-            <span className="text-xs sm:text-sm font-semibold">
+            <span className="text-xs font-semibold">
               {selectedIds.size} player{selectedIds.size > 1 ? 's' : ''} selected
             </span>
           </div>
@@ -536,13 +926,13 @@ export default function PlayersAdminPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={deselectAll}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+              className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
             >
               Deselect All
             </button>
             <button
               onClick={() => setIsDeleteSelectedModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete Selected ({selectedIds.size})</span>
@@ -551,104 +941,125 @@ export default function PlayersAdminPage() {
         </div>
       )}
 
-      {/* Search & Filter Toolbar */}
-      <div className="bg-white border border-brand-border rounded-2xl p-4 shadow-xs space-y-3">
+      {/* ============================================================================== */}
+      {/* 4. SEARCH & FILTER TOOLBAR (NO UGLY SCROLLBAR + COUNT BADGES ON PILLS) */}
+      {/* ============================================================================== */}
+      <div className="bg-white border border-slate-200/80 rounded-xl p-3.5 shadow-xs space-y-2.5">
         {/* Search Input */}
         <div className="relative">
-          <Search className="w-4 h-4 text-brand-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by player name, registration ID, mobile, or city..."
-            className="w-full h-10 pl-10 pr-3.5 rounded-xl border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
+            placeholder="Search by player name, registration ID, mobile, city, or UTR number..."
+            className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white focus-ring"
           />
         </div>
 
-        {/* Filter Chips + Select All Helper on Mobile */}
-        <div className="flex items-center justify-between gap-2 pt-1 overflow-x-auto pb-1">
+        {/* Filter Pills with Count Badges (Hidden native scrollbar with .no-scrollbar) */}
+        <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar py-0.5">
           <div className="flex items-center gap-1.5 shrink-0">
             {[
-              { id: 'all', label: 'All Players' },
-              { id: 'verified', label: 'Verified Payments' },
-              { id: 'pending', label: 'Pending Payments' },
-              { id: 'rejected', label: 'Rejected Payments' },
-              { id: 'batsman', label: 'Batsmen' },
-              { id: 'bowler', label: 'Bowlers' },
-              { id: 'all_rounder', label: 'All-Rounders' },
-              { id: 'wicketkeeper', label: 'Wicketkeepers' }
+              { id: 'all', label: 'All Players', count: stats.total },
+              { id: 'verified', label: 'Verified', count: stats.verified },
+              { id: 'pending', label: 'Pending Review', count: stats.pending, alert: stats.pending > 0 },
+              { id: 'rejected', label: 'Rejected', count: stats.rejected },
+              { id: 'batsman', label: 'Batsmen', count: stats.batsmen },
+              { id: 'bowler', label: 'Bowlers', count: stats.bowlers },
+              { id: 'all_rounder', label: 'All-Rounders', count: stats.allRounders },
+              { id: 'wicketkeeper', label: 'Wicketkeepers', count: stats.wicketkeepers }
             ].map(f => {
               const active = activeFilter === f.id;
               return (
                 <button
                   key={f.id}
                   onClick={() => setActiveFilter(f.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors shrink-0 whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 ${
                     active
-                      ? 'bg-primary-green text-white shadow-xs'
-                      : 'bg-gray-100 text-brand-muted hover:text-brand-dark hover:bg-gray-200'
+                      ? 'bg-primary-green text-white shadow-2xs font-semibold'
+                      : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
                   }`}
                 >
-                  {f.label}
+                  <span>{f.label}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      active
+                        ? 'bg-white/20 text-white'
+                        : f.alert
+                        ? 'bg-amber-200 text-amber-900'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {f.count}
+                  </span>
                 </button>
               );
             })}
           </div>
 
           {/* Quick Select All Toggle */}
-          {players.length > 0 && (
+          {displayedPlayers.length > 0 && (
             <button
               onClick={toggleSelectAll}
               className="text-xs font-semibold text-primary-green hover:underline whitespace-nowrap shrink-0 ml-2"
             >
-              {isAllSelected ? 'Deselect All' : `Select All (${players.length})`}
+              {isAllSelected ? 'Deselect All' : `Select All (${displayedPlayers.length})`}
             </button>
           )}
         </div>
       </div>
 
-      {/* Players List */}
+      {/* ============================================================================== */}
+      {/* 5. PLAYERS LIST (CLEAN HIGH-DENSITY ENTERPRISE TABLE & MOBILE CARDS) */}
+      {/* ============================================================================== */}
       {loading ? (
-        <div className="py-20 text-center space-y-2 bg-white rounded-2xl border border-brand-border">
-          <Loader2 className="w-7 h-7 animate-spin text-primary-green mx-auto" />
-          <p className="text-xs text-brand-muted">Fetching players roster...</p>
+        <div className="py-16 text-center space-y-2 bg-white rounded-xl border border-slate-200">
+          <Loader2 className="w-6 h-6 animate-spin text-primary-green mx-auto" />
+          <p className="text-xs text-slate-500">Loading tournament roster...</p>
         </div>
-      ) : players.length === 0 ? (
-        <div className="py-16 text-center space-y-3 bg-white rounded-2xl border border-brand-border p-6">
-          <UserX className="w-10 h-10 text-brand-muted mx-auto" />
-          <p className="text-sm font-bold text-brand-dark">No players match the criteria</p>
-          <p className="text-xs text-brand-muted">Try adjusting your filters, search terms, or add a new player.</p>
+      ) : displayedPlayers.length === 0 ? (
+        <div className="py-12 text-center space-y-2.5 bg-white rounded-xl border border-slate-200 p-6">
+          <UserX className="w-8 h-8 text-slate-400 mx-auto" />
+          <p className="text-xs font-bold text-slate-800">No players match the criteria</p>
+          <p className="text-[11px] text-slate-500">Try adjusting your filters, search terms, or add a new player.</p>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary-green text-white text-xs font-bold transition-all shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-green text-white text-xs font-semibold shadow-xs"
           >
-            <UserPlus className="w-4 h-4" />
-            <span>Add Player Now</span>
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Add Player</span>
           </button>
         </div>
       ) : (
         <>
           {/* Mobile Responsive Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:hidden gap-3.5">
-            {players.map(player => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:hidden gap-3">
+            {displayedPlayers.map(player => {
               const isSelected = selectedIds.has(player.id);
+              const isPending =
+                player.payment?.payment_status === 'pending_verification';
+              const isVerified = player.payment?.payment_status === 'verified';
+
               return (
                 <div
                   key={player.id}
-                  className={`bg-white border rounded-2xl p-4 shadow-xs space-y-3 transition-all ${
+                  className={`bg-white border rounded-xl p-3.5 shadow-2xs space-y-2.5 transition-all ${
                     isSelected
-                      ? 'border-primary-green ring-2 ring-primary-green/20 bg-light-green/10'
-                      : 'border-brand-border'
+                      ? 'border-primary-green ring-1 ring-primary-green/30 bg-light-green/10'
+                      : isPending
+                      ? 'border-amber-300'
+                      : 'border-slate-200'
                   }`}
                 >
-                  {/* Header: Checkbox + Photo + Name + Role */}
+                  {/* Card Header */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleSelectOne(player.id)}
-                        className="w-4 h-4 accent-primary-green rounded cursor-pointer shrink-0 mt-0.5"
+                        className="w-4 h-4 accent-primary-green rounded cursor-pointer shrink-0"
                       />
                       <img
                         src={
@@ -656,66 +1067,62 @@ export default function PlayersAdminPage() {
                           'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'
                         }
                         alt={player.full_name}
-                        className="w-11 h-11 rounded-xl object-cover border border-gray-200 shrink-0"
+                        className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0"
                       />
                       <div className="min-w-0">
-                        <h3 className="font-bold text-sm text-brand-dark truncate">{player.full_name}</h3>
-                        <span className="font-mono text-xs font-bold text-primary-green block">
+                        <h3 className="font-bold text-xs text-slate-900 truncate">{player.full_name}</h3>
+                        <span className="font-mono text-[11px] font-bold text-primary-green block">
                           {player.registration_id}
                         </span>
-                        <span className="text-[11px] text-brand-muted truncate block">
-                          {player.email}
-                        </span>
+                        <span className="text-[10px] text-slate-400 truncate block">{player.email}</span>
                       </div>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-light-green text-primary-green border border-primary-green/20 shrink-0">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-700 shrink-0">
                       {player.playing_role.replace('_', ' ')}
                     </span>
                   </div>
 
                   {/* Details Grid */}
-                  <div className="grid grid-cols-2 gap-2.5 text-xs py-2.5 px-3 bg-gray-50/80 rounded-xl border border-gray-100">
+                  <div className="grid grid-cols-2 gap-2 text-xs py-2 px-2.5 bg-slate-50/70 rounded-lg border border-slate-100">
                     <div>
-                      <span className="text-brand-muted text-[11px] block">City & Phone:</span>
-                      <span className="font-medium text-brand-dark block">{player.city}</span>
-                      <span className="font-mono text-brand-muted text-[11px]">{player.mobile}</span>
+                      <span className="text-slate-400 text-[10px] block">Contact:</span>
+                      <span className="font-medium text-slate-800 text-[11px] block">{player.city}</span>
+                      <span className="font-mono text-slate-500 text-[10px]">{player.mobile}</span>
                     </div>
                     <div>
-                      <span className="text-brand-muted text-[11px] block">Batting & Bowling:</span>
-                      <span className="font-semibold text-brand-dark block">
-                        {player.batting_style === 'right_hand' ? 'Right Hand Bat' : 'Left Hand Bat'}
+                      <span className="text-slate-400 text-[10px] block">Cricket Craft:</span>
+                      <span className="font-semibold text-slate-800 text-[11px] block">
+                        {player.batting_style === 'right_hand' ? 'RH Bat' : 'LH Bat'}
                       </span>
-                      <span className="text-[11px] text-brand-muted block">
-                        {player.bowling_arm === 'do_not_bowl'
-                          ? 'Do not bowl'
-                          : `${player.bowling_arm === 'right_arm' ? 'Right Arm' : 'Left Arm'} • ${player.bowling_type.replace('_', ' ')}`}
+                      <span className="text-[10px] text-slate-500 block truncate">
+                        {player.bowling_arm === 'do_not_bowl' ? 'No bowl' : player.bowling_type.replace('_', ' ')}
                       </span>
                     </div>
-                    <div className="pt-1.5 border-t border-gray-200/60">
-                      <span className="text-brand-muted text-[11px] block">Payment:</span>
-                      {player.payment?.payment_status === 'verified' ? (
-                        <span className="font-semibold text-green-700 flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> Verified (₹500)
+                    <div className="pt-1.5 border-t border-slate-200/60">
+                      <span className="text-slate-400 text-[10px] block">Payment:</span>
+                      {isVerified ? (
+                        <span className="font-semibold text-emerald-700 text-[11px] flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ₹500 Paid
                         </span>
-                      ) : player.payment?.payment_status === 'rejected' ? (
-                        <span className="font-semibold text-red-600 flex items-center gap-1">
-                          <XCircle className="w-3.5 h-3.5" /> Rejected
+                      ) : isPending ? (
+                        <span className="font-semibold text-amber-700 text-[11px] flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-amber-600" /> Pending Review
                         </span>
                       ) : (
-                        <span className="font-semibold text-amber-600 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" /> Pending
+                        <span className="font-semibold text-red-600 text-[11px] flex items-center gap-1">
+                          <XCircle className="w-3 h-3" /> Rejected
                         </span>
                       )}
                     </div>
-                    <div className="pt-1.5 border-t border-gray-200/60">
-                      <span className="text-brand-muted text-[11px] block">Reg Status:</span>
+                    <div className="pt-1.5 border-t border-slate-200/60">
+                      <span className="text-slate-400 text-[10px] block">Status:</span>
                       <span
-                        className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold capitalize ${
+                        className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold capitalize ${
                           player.registration_status === 'approved'
-                            ? 'bg-green-100 text-green-800'
+                            ? 'bg-emerald-100 text-emerald-800'
                             : player.registration_status === 'rejected'
                             ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-200 text-brand-dark'
+                            : 'bg-slate-200 text-slate-700'
                         }`}
                       >
                         {player.registration_status.replace('_', ' ')}
@@ -723,50 +1130,40 @@ export default function PlayersAdminPage() {
                     </div>
                   </div>
 
-                  {/* Mobile Actions: View, Edit, Approve, Reject, Delete */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 pt-0.5">
                     <button
                       onClick={() => setSelectedPlayer(player)}
-                      className="flex-1 h-8 rounded-lg border border-brand-border bg-white hover:bg-gray-50 text-xs font-semibold text-brand-dark flex items-center justify-center gap-1 transition-colors shadow-2xs"
+                      className="flex-1 h-7.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center justify-center gap-1 transition-colors"
                     >
-                      <Eye className="w-3.5 h-3.5 text-brand-muted" />
+                      <Eye className="w-3 h-3 text-slate-400" />
                       <span>View</span>
                     </button>
 
                     <button
                       onClick={() => openEditModal(player)}
-                      className="px-2.5 h-8 rounded-lg border border-brand-border bg-white hover:bg-gray-50 text-xs font-semibold text-blue-700 flex items-center gap-1 transition-colors shadow-2xs"
-                      title="Edit player profile"
+                      className="px-2 h-7.5 rounded-md border border-blue-200 bg-blue-50/50 hover:bg-blue-100/60 text-xs font-semibold text-blue-700 flex items-center gap-1"
+                      title="Edit player record"
                     >
-                      <Edit className="w-3.5 h-3.5" />
+                      <Edit className="w-3 h-3" />
                       <span>Edit</span>
                     </button>
 
-                    {player.registration_status !== 'approved' && (
+                    {isPending && (
                       <button
-                        onClick={() => handleApprove(player.id)}
+                        onClick={() => handleVerifyPaymentAndApprove(player)}
                         disabled={actionLoading}
-                        className="px-2.5 h-8 rounded-lg bg-primary-green hover:bg-primary-dark text-white text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs"
-                        title="Approve player"
+                        className="px-2.5 h-7.5 rounded-md bg-primary-green hover:bg-primary-dark text-white text-xs font-semibold flex items-center gap-1"
+                        title="Verify payment and approve"
                       >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Approve</span>
-                      </button>
-                    )}
-
-                    {player.registration_status !== 'rejected' && (
-                      <button
-                        onClick={() => setRejectingPlayer(player)}
-                        className="px-2 h-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold flex items-center gap-1 transition-colors"
-                        title="Reject player"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Verify</span>
                       </button>
                     )}
 
                     <button
                       onClick={() => setDeletingPlayer(player)}
-                      className="px-2 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold flex items-center gap-1 transition-colors"
+                      className="p-1.5 h-7.5 rounded-md bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center"
                       title="Delete player"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -777,169 +1174,190 @@ export default function PlayersAdminPage() {
             })}
           </div>
 
-          {/* Desktop Table */}
-          <div className="hidden lg:block bg-white border border-brand-border rounded-2xl shadow-xs overflow-hidden">
-            <div className="overflow-x-auto w-full">
+          {/* Desktop High-Density Table */}
+          <div className="hidden lg:block bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden">
+            <div className="overflow-x-auto w-full no-scrollbar">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-gray-50/80 border-b border-brand-border text-brand-muted font-semibold uppercase tracking-wider">
-                    <th className="py-3.5 px-4 w-10 text-center">
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="py-2.5 px-3.5 w-10 text-center">
                       <input
                         type="checkbox"
                         checked={isAllSelected}
                         onChange={toggleSelectAll}
-                        className="w-4 h-4 accent-primary-green rounded cursor-pointer"
+                        className="w-3.5 h-3.5 accent-primary-green rounded cursor-pointer"
                         title="Select/Deselect All"
                       />
                     </th>
-                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[190px]">Player</th>
-                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[140px]">Registration ID</th>
-                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[110px]">Role</th>
-                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[140px]">Mobile & City</th>
-                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[170px]">Batting / Bowling</th>
-                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[120px]">Payment</th>
-                    <th className="py-3.5 px-4 text-left whitespace-nowrap min-w-[110px]">Reg Status</th>
-                    <th className="py-3.5 px-4 text-right whitespace-nowrap min-w-[210px]">Actions</th>
+                    <th className="py-2.5 px-3 text-left whitespace-nowrap min-w-[170px]">Player Profile</th>
+                    <th className="py-2.5 px-3 text-left whitespace-nowrap min-w-[130px]">Registration ID</th>
+                    <th className="py-2.5 px-3 text-left whitespace-nowrap min-w-[95px]">Role</th>
+                    <th className="py-2.5 px-3 text-left whitespace-nowrap min-w-[130px]">Mobile & City</th>
+                    <th className="py-2.5 px-3 text-left whitespace-nowrap min-w-[140px]">Batting / Bowling</th>
+                    <th className="py-2.5 px-3 text-left whitespace-nowrap min-w-[130px]">Payment Status</th>
+                    <th className="py-2.5 px-3 text-left whitespace-nowrap min-w-[95px]">Reg Status</th>
+                    <th className="py-2.5 px-3.5 text-right whitespace-nowrap min-w-[190px]">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {players.map(player => {
+                <tbody className="divide-y divide-slate-100">
+                  {displayedPlayers.map(player => {
                     const isSelected = selectedIds.has(player.id);
+                    const isPending =
+                      player.payment?.payment_status === 'pending_verification';
+                    const isVerified = player.payment?.payment_status === 'verified';
+
                     return (
                       <tr
                         key={player.id}
                         className={`transition-colors ${
-                          isSelected ? 'bg-light-green/20' : 'hover:bg-gray-50/70'
+                          isSelected
+                            ? 'bg-light-green/20'
+                            : isPending
+                            ? 'bg-amber-50/30 hover:bg-amber-50/60'
+                            : 'hover:bg-slate-50/70'
                         }`}
                       >
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-2.5 px-3.5 text-center">
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => toggleSelectOne(player.id)}
-                            className="w-4 h-4 accent-primary-green rounded cursor-pointer"
+                            className="w-3.5 h-3.5 accent-primary-green rounded cursor-pointer"
                           />
                         </td>
 
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="flex items-center gap-3">
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2.5">
                             <img
                               src={
                                 player.profile_photo_path ||
                                 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'
                               }
                               alt={player.full_name}
-                              className="w-10 h-10 rounded-xl object-cover border border-gray-200 shrink-0"
+                              className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
                             />
                             <div>
-                              <span className="font-bold text-sm text-brand-dark block whitespace-nowrap">
+                              <span className="font-semibold text-xs text-slate-900 block whitespace-nowrap">
                                 {player.full_name}
                               </span>
-                              <span className="text-[11px] text-brand-muted block whitespace-nowrap">
+                              <span className="text-[11px] text-slate-400 block whitespace-nowrap">
                                 {player.email}
                               </span>
                             </div>
                           </div>
                         </td>
 
-                        <td className="py-3 px-4 font-mono font-bold text-primary-green whitespace-nowrap">
+                        <td className="py-2.5 px-3 font-mono font-semibold text-primary-green whitespace-nowrap text-[11px]">
                           {player.registration_id}
                         </td>
 
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-light-green text-primary-green border border-primary-green/20 capitalize">
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 capitalize">
                             {player.playing_role.replace('_', ' ')}
                           </span>
                         </td>
 
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <span className="text-brand-dark font-medium block whitespace-nowrap">{player.mobile}</span>
-                          <span className="text-[11px] text-brand-muted block">{player.city}</span>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span className="text-slate-800 font-medium block whitespace-nowrap text-xs">{player.mobile}</span>
+                          <span className="text-[11px] text-slate-400 block">{player.city}</span>
                         </td>
 
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="font-semibold text-brand-dark">
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <div className="font-medium text-slate-800 text-xs">
                             {player.batting_style === 'right_hand' ? 'Right Hand Bat' : 'Left Hand Bat'}
                           </div>
-                          <div className="text-[11px] text-brand-muted mt-0.5">
+                          <div className="text-[10px] text-slate-400">
                             {player.bowling_arm === 'do_not_bowl'
                               ? 'Do not bowl'
-                              : `${player.bowling_arm === 'right_arm' ? 'Right Arm' : 'Left Arm'} • ${player.bowling_type.replace('_', ' ')}`}
+                              : `${player.bowling_arm === 'right_arm' ? 'Right' : 'Left'} • ${player.bowling_type.replace('_', ' ')}`}
                           </div>
                         </td>
 
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          {player.payment?.payment_status === 'verified' ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Verified
-                            </span>
-                          ) : player.payment?.payment_status === 'rejected' ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-                              <XCircle className="w-3.5 h-3.5 text-red-600" /> Rejected
-                            </span>
+                        {/* Payment Status Column */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {isVerified ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ₹500 Verified
+                              </span>
+                              <span className="block text-[10px] font-mono text-slate-400 mt-0.5">
+                                UTR: {player.payment?.utr_number || 'N/A'}
+                              </span>
+                            </div>
+                          ) : isPending ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-300">
+                                <Clock className="w-3 h-3 text-amber-600" /> Pending Review
+                              </span>
+                              <span className="block text-[10px] font-mono text-amber-700 font-semibold mt-0.5">
+                                UTR: {player.payment?.utr_number || 'Awaiting'}
+                              </span>
+                            </div>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                              <Clock className="w-3.5 h-3.5 text-amber-600" /> Pending
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200">
+                              <XCircle className="w-3 h-3 text-red-600" /> Rejected
                             </span>
                           )}
                         </td>
 
-                        <td className="py-3 px-4 whitespace-nowrap">
+                        {/* Registration Status Column */}
+                        <td className="py-2.5 px-3 whitespace-nowrap">
                           <span
-                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold capitalize ${
                               player.registration_status === 'approved'
-                                ? 'bg-green-100 text-green-800 border border-green-200'
+                                ? 'bg-emerald-100 text-emerald-800'
                                 : player.registration_status === 'rejected'
-                                ? 'bg-red-100 text-red-800 border border-red-200'
-                                : 'bg-gray-100 text-brand-dark border border-gray-200'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-slate-100 text-slate-700'
                             }`}
                           >
                             {player.registration_status.replace('_', ' ')}
                           </span>
                         </td>
 
-                        {/* Full CRUD Actions on Desktop */}
-                        <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap min-w-[210px]">
+                        {/* Actions Column */}
+                        <td className="py-2.5 px-3.5 text-right space-x-1 whitespace-nowrap min-w-[190px]">
                           <button
                             onClick={() => setSelectedPlayer(player)}
-                            className="px-2.5 py-1.5 rounded-lg border border-brand-border bg-white hover:bg-gray-50 text-brand-dark font-semibold text-xs transition-colors shadow-2xs"
-                            title="View full player dossier"
+                            className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors shadow-2xs"
+                            title="View full player profile"
                           >
                             View
                           </button>
 
                           <button
                             onClick={() => openEditModal(player)}
-                            className="px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50/50 hover:bg-blue-100/60 text-blue-700 font-semibold text-xs transition-colors"
+                            className="px-2 py-1 rounded border border-blue-200 bg-blue-50/60 hover:bg-blue-100/70 text-blue-700 font-semibold text-xs transition-colors"
                             title="Edit player record"
                           >
                             Edit
                           </button>
 
-                          {player.registration_status !== 'approved' && (
+                          {isPending && (
+                            <button
+                              onClick={() => handleVerifyPaymentAndApprove(player)}
+                              disabled={actionLoading}
+                              className="px-2 py-1 rounded bg-primary-green hover:bg-primary-dark text-white font-semibold text-xs transition-colors shadow-2xs"
+                              title="Verify payment & approve player in 1 click"
+                            >
+                              Verify
+                            </button>
+                          )}
+
+                          {player.registration_status !== 'approved' && !isPending && (
                             <button
                               onClick={() => handleApprove(player.id)}
                               disabled={actionLoading}
-                              className="px-2.5 py-1.5 rounded-lg bg-primary-green hover:bg-primary-dark text-white font-semibold text-xs transition-colors shadow-2xs"
+                              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs transition-colors shadow-2xs"
                               title="Approve player"
                             >
                               Approve
                             </button>
                           )}
 
-                          {player.registration_status !== 'rejected' && (
-                            <button
-                              onClick={() => setRejectingPlayer(player)}
-                              className="px-2 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs transition-colors"
-                              title="Reject player registration"
-                            >
-                              Reject
-                            </button>
-                          )}
-
                           <button
                             onClick={() => setDeletingPlayer(player)}
-                            className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors inline-flex items-center"
+                            className="p-1 rounded text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors inline-flex items-center align-middle"
                             title="Delete player"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -960,26 +1378,26 @@ export default function PlayersAdminPage() {
       {/* ============================================================================== */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-xl border border-brand-border max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+          <div className="bg-white rounded-xl max-w-xl w-full p-5 space-y-3.5 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-light-green text-primary-green flex items-center justify-center">
-                  <UserPlus className="w-4 h-4" />
+                <div className="w-7 h-7 rounded-lg bg-light-green text-primary-green flex items-center justify-center">
+                  <UserPlus className="w-3.5 h-3.5" />
                 </div>
-                <h3 className="font-bold text-base text-brand-dark">Add New Player Registration</h3>
+                <h3 className="font-bold text-sm text-slate-900">Add New Player Registration</h3>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1 rounded-lg text-brand-muted hover:bg-gray-100"
+                className="p-1 rounded-md text-slate-400 hover:bg-slate-100"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleAddPlayerSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <form onSubmit={handleAddPlayerSubmit} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -988,12 +1406,12 @@ export default function PlayersAdminPage() {
                     value={addForm.full_name}
                     onChange={e => setAddForm({ ...addForm, full_name: e.target.value })}
                     placeholder="e.g. Virat Kohli"
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     Email Address <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -1002,12 +1420,12 @@ export default function PlayersAdminPage() {
                     value={addForm.email}
                     onChange={e => setAddForm({ ...addForm, email: e.target.value })}
                     placeholder="virat@example.com"
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     Mobile Number <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -1016,12 +1434,12 @@ export default function PlayersAdminPage() {
                     value={addForm.mobile}
                     onChange={e => setAddForm({ ...addForm, mobile: e.target.value })}
                     placeholder="9876543210"
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     City <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -1030,13 +1448,13 @@ export default function PlayersAdminPage() {
                     value={addForm.city}
                     onChange={e => setAddForm({ ...addForm, city: e.target.value })}
                     placeholder="e.g. Delhi"
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-brand-dark mb-1">
+                <label className="block text-xs font-semibold text-slate-800 mb-1">
                   Residential Address
                 </label>
                 <input
@@ -1044,20 +1462,25 @@ export default function PlayersAdminPage() {
                   value={addForm.address}
                   onChange={e => setAddForm({ ...addForm, address: e.target.value })}
                   placeholder="Street / Area"
-                  className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                  className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                 />
               </div>
 
               {/* Cricket Capabilities */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-0.5">
                 <div>
-                  <label className="block text-[11px] font-semibold text-brand-dark mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-800 mb-1">
                     Role <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={addForm.playing_role}
-                    onChange={e => setAddForm({ ...addForm, playing_role: e.target.value })}
-                    className="w-full h-9 px-2 rounded-lg border border-brand-border text-xs text-brand-dark bg-white"
+                    onChange={e =>
+                      setAddForm({
+                        ...addForm,
+                        playing_role: e.target.value as CreatePlayerFormState['playing_role']
+                      })
+                    }
+                    className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white"
                   >
                     <option value="batsman">Batsman</option>
                     <option value="bowler">Bowler</option>
@@ -1067,13 +1490,18 @@ export default function PlayersAdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-brand-dark mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-800 mb-1">
                     Batting
                   </label>
                   <select
                     value={addForm.batting_style}
-                    onChange={e => setAddForm({ ...addForm, batting_style: e.target.value })}
-                    className="w-full h-9 px-2 rounded-lg border border-brand-border text-xs text-brand-dark bg-white"
+                    onChange={e =>
+                      setAddForm({
+                        ...addForm,
+                        batting_style: e.target.value as CreatePlayerFormState['batting_style']
+                      })
+                    }
+                    className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white"
                   >
                     <option value="right_hand">Right Hand</option>
                     <option value="left_hand">Left Hand</option>
@@ -1081,13 +1509,18 @@ export default function PlayersAdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-brand-dark mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-800 mb-1">
                     Bowling Arm
                   </label>
                   <select
                     value={addForm.bowling_arm}
-                    onChange={e => setAddForm({ ...addForm, bowling_arm: e.target.value })}
-                    className="w-full h-9 px-2 rounded-lg border border-brand-border text-xs text-brand-dark bg-white"
+                    onChange={e =>
+                      setAddForm({
+                        ...addForm,
+                        bowling_arm: e.target.value as CreatePlayerFormState['bowling_arm']
+                      })
+                    }
+                    className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white"
                   >
                     <option value="right_arm">Right Arm</option>
                     <option value="left_arm">Left Arm</option>
@@ -1096,13 +1529,18 @@ export default function PlayersAdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-brand-dark mb-1">
-                    Bowling Craft
+                  <label className="block text-[11px] font-semibold text-slate-800 mb-1">
+                    Bowling Type
                   </label>
                   <select
                     value={addForm.bowling_type}
-                    onChange={e => setAddForm({ ...addForm, bowling_type: e.target.value })}
-                    className="w-full h-9 px-2 rounded-lg border border-brand-border text-xs text-brand-dark bg-white"
+                    onChange={e =>
+                      setAddForm({
+                        ...addForm,
+                        bowling_type: e.target.value as CreatePlayerFormState['bowling_type']
+                      })
+                    }
+                    className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white"
                   >
                     <option value="fast">Fast</option>
                     <option value="medium">Medium</option>
@@ -1113,15 +1551,20 @@ export default function PlayersAdminPage() {
               </div>
 
               {/* Payment Status & UTR */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     Payment Status
                   </label>
                   <select
                     value={addForm.payment_status}
-                    onChange={e => setAddForm({ ...addForm, payment_status: e.target.value })}
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark bg-white"
+                    onChange={e =>
+                      setAddForm({
+                        ...addForm,
+                        payment_status: e.target.value as CreatePlayerFormState['payment_status']
+                      })
+                    }
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white"
                   >
                     <option value="verified">Verified (₹500 Paid)</option>
                     <option value="pending_verification">Pending Verification</option>
@@ -1129,7 +1572,7 @@ export default function PlayersAdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     UTR Reference (Optional)
                   </label>
                   <input
@@ -1138,23 +1581,23 @@ export default function PlayersAdminPage() {
                     value={addForm.utr_number}
                     onChange={e => setAddForm({ ...addForm, utr_number: e.target.value })}
                     placeholder="12-digit UTR"
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs font-mono text-brand-dark focus-ring"
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs font-mono text-slate-900 focus-ring"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-end gap-2 pt-2.5 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-brand-muted hover:bg-gray-100"
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-5 py-2 rounded-xl bg-primary-green hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-xs"
+                  className="px-4 py-1.5 rounded-lg bg-primary-green hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-xs"
                 >
                   {actionLoading ? 'Creating...' : 'Register Player'}
                 </button>
@@ -1169,26 +1612,26 @@ export default function PlayersAdminPage() {
       {/* ============================================================================== */}
       {editingPlayer && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-xl border border-brand-border max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+          <div className="bg-white rounded-xl max-w-xl w-full p-5 space-y-3.5 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
               <div>
-                <h3 className="font-bold text-base text-brand-dark">Edit Player Record</h3>
-                <span className="font-mono text-xs font-bold text-primary-green">
+                <h3 className="font-bold text-sm text-slate-900">Edit Player Record</h3>
+                <span className="font-mono text-[11px] font-bold text-primary-green">
                   {editingPlayer.registration_id}
                 </span>
               </div>
               <button
                 onClick={() => setEditingPlayer(null)}
-                className="p-1 rounded-lg text-brand-muted hover:bg-gray-100"
+                className="p-1 rounded-md text-slate-400 hover:bg-slate-100"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleEditPlayerSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <form onSubmit={handleEditPlayerSubmit} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -1196,12 +1639,12 @@ export default function PlayersAdminPage() {
                     required
                     value={editForm.full_name}
                     onChange={e => setEditForm({ ...editForm, full_name: e.target.value })}
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     Email Address <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -1209,12 +1652,12 @@ export default function PlayersAdminPage() {
                     required
                     value={editForm.email}
                     onChange={e => setEditForm({ ...editForm, email: e.target.value })}
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     Mobile Number <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -1222,12 +1665,12 @@ export default function PlayersAdminPage() {
                     required
                     value={editForm.mobile}
                     onChange={e => setEditForm({ ...editForm, mobile: e.target.value })}
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-brand-dark mb-1">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
                     City <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -1235,32 +1678,37 @@ export default function PlayersAdminPage() {
                     required
                     value={editForm.city}
                     onChange={e => setEditForm({ ...editForm, city: e.target.value })}
-                    className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                    className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-brand-dark mb-1">
+                <label className="block text-xs font-semibold text-slate-800 mb-1">
                   Residential Address
                 </label>
                 <input
                   type="text"
                   value={editForm.address}
                   onChange={e => setEditForm({ ...editForm, address: e.target.value })}
-                  className="w-full h-10 px-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                  className="w-full h-8.5 px-3 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                 />
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-semibold text-brand-dark mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-800 mb-1">
                     Playing Role
                   </label>
                   <select
                     value={editForm.playing_role}
-                    onChange={e => setEditForm({ ...editForm, playing_role: e.target.value })}
-                    className="w-full h-9 px-2 rounded-lg border border-brand-border text-xs text-brand-dark bg-white"
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        playing_role: e.target.value as EditPlayerFormState['playing_role']
+                      })
+                    }
+                    className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white"
                   >
                     <option value="batsman">Batsman</option>
                     <option value="bowler">Bowler</option>
@@ -1270,13 +1718,18 @@ export default function PlayersAdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-brand-dark mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-800 mb-1">
                     Batting
                   </label>
                   <select
                     value={editForm.batting_style}
-                    onChange={e => setEditForm({ ...editForm, batting_style: e.target.value })}
-                    className="w-full h-9 px-2 rounded-lg border border-brand-border text-xs text-brand-dark bg-white"
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        batting_style: e.target.value as EditPlayerFormState['batting_style']
+                      })
+                    }
+                    className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white"
                   >
                     <option value="right_hand">Right Hand</option>
                     <option value="left_hand">Left Hand</option>
@@ -1284,13 +1737,18 @@ export default function PlayersAdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-brand-dark mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-800 mb-1">
                     Bowling Arm
                   </label>
                   <select
                     value={editForm.bowling_arm}
-                    onChange={e => setEditForm({ ...editForm, bowling_arm: e.target.value })}
-                    className="w-full h-9 px-2 rounded-lg border border-brand-border text-xs text-brand-dark bg-white"
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        bowling_arm: e.target.value as EditPlayerFormState['bowling_arm']
+                      })
+                    }
+                    className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white"
                   >
                     <option value="right_arm">Right Arm</option>
                     <option value="left_arm">Left Arm</option>
@@ -1299,13 +1757,18 @@ export default function PlayersAdminPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-brand-dark mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-800 mb-1">
                     Reg Status
                   </label>
                   <select
                     value={editForm.registration_status}
-                    onChange={e => setEditForm({ ...editForm, registration_status: e.target.value })}
-                    className="w-full h-9 px-2 rounded-lg border border-brand-border text-xs text-brand-dark bg-white"
+                    onChange={e =>
+                      setEditForm({
+                        ...editForm,
+                        registration_status: e.target.value as EditPlayerFormState['registration_status']
+                      })
+                    }
+                    className="w-full h-8 px-2 rounded-lg border border-slate-200 text-xs text-slate-900 bg-white"
                   >
                     <option value="approved">Approved</option>
                     <option value="under_review">Under Review</option>
@@ -1314,18 +1777,18 @@ export default function PlayersAdminPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-end gap-2 pt-2.5 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingPlayer(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-brand-muted hover:bg-gray-100"
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-5 py-2 rounded-xl bg-primary-green hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-xs"
+                  className="px-4 py-1.5 rounded-lg bg-primary-green hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-xs"
                 >
                   {actionLoading ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -1340,23 +1803,23 @@ export default function PlayersAdminPage() {
       {/* ============================================================================== */}
       {deletingPlayer && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-red-200 animate-in zoom-in-95 duration-150">
-            <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
+          <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-3.5 shadow-xl border border-red-200 animate-in zoom-in-95 duration-150">
+            <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-5 h-5" />
             </div>
 
             <div className="text-center space-y-1">
-              <h3 className="font-bold text-base text-brand-dark">Delete Player Registration?</h3>
-              <p className="text-xs text-brand-muted">
+              <h3 className="font-bold text-sm text-slate-900">Delete Player Registration?</h3>
+              <p className="text-xs text-slate-500">
                 Are you sure you want to delete <strong>{deletingPlayer.full_name}</strong> ({deletingPlayer.registration_id})? This will permanently remove their profile and payment records.
               </p>
             </div>
 
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-center gap-2.5 pt-1.5">
               <button
                 type="button"
                 onClick={() => setDeletingPlayer(null)}
-                className="flex-1 py-2 rounded-xl border border-brand-border text-xs font-semibold text-brand-dark hover:bg-gray-50"
+                className="flex-1 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
@@ -1364,7 +1827,7 @@ export default function PlayersAdminPage() {
                 type="button"
                 onClick={handleDeleteSingle}
                 disabled={actionLoading}
-                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs"
+                className="flex-1 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs"
               >
                 {actionLoading ? 'Deleting...' : 'Yes, Delete'}
               </button>
@@ -1378,25 +1841,25 @@ export default function PlayersAdminPage() {
       {/* ============================================================================== */}
       {isDeleteSelectedModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-red-200 animate-in zoom-in-95 duration-150">
-            <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
+          <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-3.5 shadow-xl border border-red-200 animate-in zoom-in-95 duration-150">
+            <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-5 h-5" />
             </div>
 
             <div className="text-center space-y-1">
-              <h3 className="font-bold text-base text-brand-dark">
+              <h3 className="font-bold text-sm text-slate-900">
                 Delete {selectedIds.size} Selected Players?
               </h3>
-              <p className="text-xs text-brand-muted">
-                You are about to permanently delete <strong>{selectedIds.size}</strong> players and their associated payment verification records.
+              <p className="text-xs text-slate-500">
+                You are about to permanently delete <strong>{selectedIds.size}</strong> players and their associated payment records.
               </p>
             </div>
 
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-center gap-2.5 pt-1.5">
               <button
                 type="button"
                 onClick={() => setIsDeleteSelectedModalOpen(false)}
-                className="flex-1 py-2 rounded-xl border border-brand-border text-xs font-semibold text-brand-dark hover:bg-gray-50"
+                className="flex-1 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
@@ -1404,7 +1867,7 @@ export default function PlayersAdminPage() {
                 type="button"
                 onClick={handleDeleteSelected}
                 disabled={actionLoading}
-                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs"
+                className="flex-1 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs"
               >
                 {actionLoading ? 'Deleting...' : `Delete ${selectedIds.size} Players`}
               </button>
@@ -1418,20 +1881,20 @@ export default function PlayersAdminPage() {
       {/* ============================================================================== */}
       {isDeleteAllModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-red-300 animate-in zoom-in-95 duration-150">
-            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
-              <ShieldAlert className="w-6 h-6 text-red-600" />
+          <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-3.5 shadow-xl border border-red-300 animate-in zoom-in-95 duration-150">
+            <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-5 h-5 text-red-600" />
             </div>
 
             <div className="text-center space-y-1">
-              <h3 className="font-bold text-base text-red-900">Emergency: Delete All Players</h3>
-              <p className="text-xs text-brand-muted">
-                This will delete <strong>ALL {players.length} player registrations</strong> and clear the entire tournament docket. This action is irreversible.
+              <h3 className="font-bold text-sm text-red-900">Emergency: Delete All Players</h3>
+              <p className="text-xs text-slate-500">
+                This will delete <strong>ALL {allPlayers.length} player registrations</strong> and clear the entire tournament docket.
               </p>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-[11px] font-bold text-brand-dark uppercase">
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-800 uppercase">
                 Type <span className="text-red-600">DELETE ALL</span> to confirm:
               </label>
               <input
@@ -1439,18 +1902,18 @@ export default function PlayersAdminPage() {
                 value={deleteAllConfirmText}
                 onChange={e => setDeleteAllConfirmText(e.target.value)}
                 placeholder="DELETE ALL"
-                className="w-full h-10 px-3 rounded-lg border border-red-300 font-mono text-xs text-red-900 bg-red-50/50 focus-ring"
+                className="w-full h-8.5 px-3 rounded-lg border border-red-300 font-mono text-xs text-red-900 bg-red-50/50 focus-ring"
               />
             </div>
 
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-center gap-2.5 pt-1.5">
               <button
                 type="button"
                 onClick={() => {
                   setIsDeleteAllModalOpen(false);
                   setDeleteAllConfirmText('');
                 }}
-                className="flex-1 py-2 rounded-xl border border-brand-border text-xs font-semibold text-brand-dark hover:bg-gray-50"
+                className="flex-1 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
@@ -1458,7 +1921,7 @@ export default function PlayersAdminPage() {
                 type="button"
                 onClick={handleDeleteAll}
                 disabled={actionLoading || deleteAllConfirmText !== 'DELETE ALL'}
-                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-xs font-bold shadow-xs"
+                className="flex-1 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-xs font-bold shadow-xs"
               >
                 {actionLoading ? 'Deleting...' : 'Confirm Delete All'}
               </button>
@@ -1472,28 +1935,27 @@ export default function PlayersAdminPage() {
       {/* ============================================================================== */}
       {rejectingPlayer && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-amber-200">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 space-y-3.5 shadow-xl border border-amber-200">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
-                <h3 className="font-bold text-base text-brand-dark">Reject Registration</h3>
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <h3 className="font-bold text-sm text-slate-900">Reject Registration</h3>
               </div>
               <button
                 onClick={() => setRejectingPlayer(null)}
-                className="p-1 rounded-lg text-brand-muted hover:bg-gray-100"
+                className="p-1 rounded-md text-slate-400 hover:bg-slate-100"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleRejectSubmit} className="space-y-4">
-              <p className="text-xs text-brand-muted">
-                Please provide an official justification for rejecting{' '}
-                <strong>{rejectingPlayer.full_name}</strong> ({rejectingPlayer.registration_id}).
+            <form onSubmit={handleRejectSubmit} className="space-y-3">
+              <p className="text-xs text-slate-500">
+                Provide justification for rejecting <strong>{rejectingPlayer.full_name}</strong> ({rejectingPlayer.registration_id}).
               </p>
 
               <div>
-                <label className="block text-xs font-semibold text-brand-dark mb-1">
+                <label className="block text-xs font-semibold text-slate-800 mb-1">
                   Rejection Reason <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -1501,23 +1963,23 @@ export default function PlayersAdminPage() {
                   rows={3}
                   value={rejectionReason}
                   onChange={e => setRejectionReason(e.target.value)}
-                  placeholder="e.g. Invalid UTR reference, blurry payment screenshot, or age requirement not met..."
-                  className="w-full p-3 rounded-lg border border-brand-border text-xs text-brand-dark focus-ring"
+                  placeholder="e.g. Invalid UTR reference or blurry payment screenshot..."
+                  className="w-full p-2.5 rounded-lg border border-slate-200 text-xs text-slate-900 focus-ring"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setRejectingPlayer(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-brand-muted hover:bg-gray-100"
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading || !rejectionReason.trim()}
-                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs disabled:opacity-50"
+                  className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs disabled:opacity-50"
                 >
                   {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
                 </button>
@@ -1532,9 +1994,9 @@ export default function PlayersAdminPage() {
       {/* ============================================================================== */}
       {selectedPlayer && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-xl border border-brand-border max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-xl w-full p-5 space-y-4 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-start justify-between pb-3 border-b border-gray-100">
+            <div className="flex items-start justify-between pb-2.5 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <img
                   src={
@@ -1542,91 +2004,91 @@ export default function PlayersAdminPage() {
                     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'
                   }
                   alt={selectedPlayer.full_name}
-                  className="w-14 h-14 rounded-2xl object-cover border border-gray-200"
+                  className="w-11 h-11 rounded-lg object-cover border border-slate-200"
                 />
                 <div>
-                  <h3 className="font-extrabold text-lg text-brand-dark">{selectedPlayer.full_name}</h3>
+                  <h3 className="font-bold text-sm text-slate-900">{selectedPlayer.full_name}</h3>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="font-mono text-xs font-bold text-primary-green">
                       {selectedPlayer.registration_id}
                     </span>
-                    <span className="text-gray-300">•</span>
-                    <span className="text-xs font-semibold capitalize text-brand-muted">
+                    <span className="text-slate-300">•</span>
+                    <span className="text-[11px] font-semibold capitalize text-slate-500">
                       {selectedPlayer.playing_role.replace('_', ' ')}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => {
                     const target = selectedPlayer;
                     setSelectedPlayer(null);
                     openEditModal(target);
                   }}
-                  className="p-2 rounded-lg text-blue-700 hover:bg-blue-50"
+                  className="p-1.5 rounded-md text-blue-700 hover:bg-blue-50"
                   title="Edit player"
                 >
-                  <Edit className="w-4 h-4" />
+                  <Edit className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setSelectedPlayer(null)}
-                  className="p-2 rounded-lg text-brand-muted hover:bg-gray-100"
+                  className="p-1.5 rounded-md text-slate-400 hover:bg-slate-100"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Dossier Content */}
-            <div className="space-y-4 text-xs">
-              {/* Contact Information */}
-              <div className="space-y-2">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-primary-green">
+            {/* Content */}
+            <div className="space-y-3.5 text-xs">
+              {/* Contact */}
+              <div className="space-y-1.5">
+                <h4 className="font-bold text-[11px] uppercase tracking-wider text-primary-green">
                   Contact & Residence
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-[11px] text-brand-muted block">Phone</span>
-                    <span className="font-semibold text-brand-dark font-mono">{selectedPlayer.mobile}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 block">Phone</span>
+                    <span className="font-semibold text-slate-800 font-mono">{selectedPlayer.mobile}</span>
                   </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-[11px] text-brand-muted block">Email</span>
-                    <span className="font-semibold text-brand-dark truncate block">{selectedPlayer.email}</span>
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 block">Email</span>
+                    <span className="font-semibold text-slate-800 truncate block">{selectedPlayer.email}</span>
                   </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-[11px] text-brand-muted block">City</span>
-                    <span className="font-semibold text-brand-dark">{selectedPlayer.city}</span>
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 block">City</span>
+                    <span className="font-semibold text-slate-800">{selectedPlayer.city}</span>
                   </div>
                 </div>
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <span className="text-[11px] text-brand-muted block">Full Residential Address</span>
-                  <p className="font-medium text-brand-dark mt-0.5 leading-relaxed">{selectedPlayer.address}</p>
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                  <span className="text-[10px] text-slate-400 block">Residential Address</span>
+                  <p className="font-medium text-slate-700 mt-0.5 leading-relaxed">{selectedPlayer.address}</p>
                 </div>
               </div>
 
               {/* Cricket Technical Profile */}
-              <div className="space-y-2">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-primary-green">
-                  Cricket Technical Profile
+              <div className="space-y-1.5">
+                <h4 className="font-bold text-[11px] uppercase tracking-wider text-primary-green">
+                  Cricket Capabilities
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-[11px] text-brand-muted block">Batting Style</span>
-                    <span className="font-semibold text-brand-dark capitalize">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 block">Batting</span>
+                    <span className="font-semibold text-slate-800 capitalize">
                       {selectedPlayer.batting_style.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-[11px] text-brand-muted block">Bowling Arm</span>
-                    <span className="font-semibold text-brand-dark capitalize">
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 block">Bowling Arm</span>
+                    <span className="font-semibold text-slate-800 capitalize">
                       {selectedPlayer.bowling_arm.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                    <span className="text-[11px] text-brand-muted block">Bowling Type</span>
-                    <span className="font-semibold text-brand-dark capitalize">
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                    <span className="text-[10px] text-slate-400 block">Bowling Type</span>
+                    <span className="font-semibold text-slate-800 capitalize">
                       {selectedPlayer.bowling_type.replace('_', ' ')}
                     </span>
                   </div>
@@ -1634,48 +2096,42 @@ export default function PlayersAdminPage() {
               </div>
 
               {/* Emergency Contact */}
-              <div className="space-y-2">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-primary-green">
-                  Emergency Contact Details
+              <div className="space-y-1.5">
+                <h4 className="font-bold text-[11px] uppercase tracking-wider text-primary-green">
+                  Emergency Contact
                 </h4>
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
                   <div>
-                    <span className="font-bold text-brand-dark">{selectedPlayer.emergency_contact_name}</span>
-                    <span className="text-xs text-brand-muted ml-2">({selectedPlayer.emergency_relationship})</span>
+                    <span className="font-semibold text-slate-900">{selectedPlayer.emergency_contact_name}</span>
+                    <span className="text-[11px] text-slate-400 ml-1.5">({selectedPlayer.emergency_relationship})</span>
                   </div>
-                  <span className="font-mono font-medium text-brand-dark">{selectedPlayer.emergency_mobile}</span>
+                  <span className="font-mono text-xs text-slate-700">{selectedPlayer.emergency_mobile}</span>
                 </div>
               </div>
 
-              {/* Payment Receipt Preview */}
-              <div className="space-y-2">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-primary-green">
-                  Submitted Payment Receipt
+              {/* Payment Details */}
+              <div className="space-y-1.5">
+                <h4 className="font-bold text-[11px] uppercase tracking-wider text-primary-green">
+                  Payment Verification Record
                 </h4>
-                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="space-y-1 text-center sm:text-left">
-                    <div className="flex items-center gap-2">
-                      <span className="text-brand-muted">UTR Reference:</span>
-                      <span className="font-mono font-bold text-brand-dark">
-                        {selectedPlayer.payment?.utr_number || 'N/A'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-brand-muted">Amount:</span>
-                      <span className="font-semibold text-primary-green">₹{selectedPlayer.payment?.amount || 500}</span>
-                      <span className="text-brand-muted">• UPI</span>
-                    </div>
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="font-mono font-semibold text-slate-800 block">
+                      UTR: {selectedPlayer.payment?.utr_number || 'N/A'}
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Amount: ₹{selectedPlayer.payment?.amount || 500} • UPI
+                    </span>
                   </div>
-
                   {selectedPlayer.payment?.screenshot_path && (
                     <a
                       href={selectedPlayer.payment.screenshot_path}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-border bg-white hover:bg-gray-100 text-brand-dark font-semibold text-xs"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>View Receipt Screenshot</span>
+                      <Receipt className="w-3 h-3 text-slate-500" />
+                      <span>View Receipt</span>
                     </a>
                   )}
                 </div>
@@ -1683,14 +2139,14 @@ export default function PlayersAdminPage() {
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+            <div className="flex items-center justify-between pt-2.5 border-t border-slate-100">
               <button
                 onClick={() => {
                   const p = selectedPlayer;
                   setSelectedPlayer(null);
                   setDeletingPlayer(p);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                className="inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:bg-red-50 px-2 py-1 rounded"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Delete Player</span>
@@ -1700,7 +2156,7 @@ export default function PlayersAdminPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedPlayer(null)}
-                  className="px-4 py-2 rounded-xl border border-brand-border text-xs font-semibold text-brand-dark hover:bg-gray-50"
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
                   Close
                 </button>
@@ -1709,12 +2165,79 @@ export default function PlayersAdminPage() {
                     type="button"
                     onClick={() => handleApprove(selectedPlayer.id)}
                     disabled={actionLoading}
-                    className="px-5 py-2 rounded-xl bg-primary-green hover:bg-primary-dark text-white text-xs font-bold shadow-xs"
+                    className="px-3.5 py-1.5 rounded-lg bg-primary-green hover:bg-primary-dark text-white text-xs font-bold shadow-xs"
                   >
                     Approve Registration
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================================== */}
+      {/* MODAL 8: RECEIPT SCREENSHOT INSPECTION MODAL */}
+      {/* ============================================================================== */}
+      {inspectingPayment && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full p-4 space-y-3 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">
+                  UPI Payment Receipt Preview
+                </h3>
+                <span className="text-[11px] text-slate-500 font-mono">
+                  {inspectingPayment.player.full_name} ({inspectingPayment.player.registration_id})
+                </span>
+              </div>
+              <button
+                onClick={() => setInspectingPayment(null)}
+                className="p-1 rounded-md text-slate-400 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Receipt Image */}
+            <div className="relative w-full max-h-[55vh] overflow-hidden rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center p-2">
+              <img
+                src={inspectingPayment.screenshotUrl}
+                alt="Payment Receipt"
+                className="max-h-[50vh] w-auto object-contain rounded shadow-sm"
+              />
+            </div>
+
+            {/* Details Bar */}
+            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200/80 flex items-center justify-between text-xs">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase tracking-wide block">UTR Reference Number</span>
+                <span className="font-mono font-bold text-slate-900">{inspectingPayment.utr}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Amount</span>
+                <span className="font-bold text-emerald-700 text-sm">₹{inspectingPayment.amount}</span>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setInspectingPayment(null)}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => handleVerifyPaymentAndApprove(inspectingPayment.player)}
+                disabled={actionLoading}
+                className="px-4 py-1.5 rounded-lg bg-primary-green hover:bg-primary-dark text-white text-xs font-bold shadow-xs flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Verify Payment & Approve</span>
+              </button>
             </div>
           </div>
         </div>
