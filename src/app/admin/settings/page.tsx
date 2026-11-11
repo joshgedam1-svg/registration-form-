@@ -16,10 +16,29 @@ import {
   Trash2,
   Image as ImageIcon,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Calendar,
+  Clock,
+  Eye,
+  Trophy
 } from 'lucide-react';
 import QRCodeDisplay from '@/components/registration/QRCodeDisplay';
 import { TournamentSettingsRow } from '@/types/settings';
+
+const BANNER_PRESETS = [
+  {
+    name: 'Stadium Floodlights (Night Match)',
+    url: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=1200&auto=format&fit=crop&q=80'
+  },
+  {
+    name: 'Cricket Pitch & Leather Ball',
+    url: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=1200&auto=format&fit=crop&q=80'
+  },
+  {
+    name: 'Championship Arena Golden Hour',
+    url: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1200&auto=format&fit=crop&q=80'
+  }
+];
 
 export default function TournamentSettingsPage() {
   const [settings, setSettings] = useState<TournamentSettingsRow | null>(null);
@@ -27,7 +46,7 @@ export default function TournamentSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Form states
+  // Core Form states
   const [tournamentName, setTournamentName] = useState('');
   const [registrationFee, setRegistrationFee] = useState(500);
   const [upiId, setUpiId] = useState('');
@@ -38,6 +57,18 @@ export default function TournamentSettingsPage() {
   const [uploadingQr, setUploadingQr] = useState(false);
   const [qrFileName, setQrFileName] = useState<string | null>(null);
 
+  // New: Registration Schedule (Start & End Date)
+  const [startDate, setStartDate] = useState('2026-03-01T00:00');
+  const [endDate, setEndDate] = useState('2026-04-30T23:59');
+
+  // New: Tournament Banner Settings
+  const [bannerPath, setBannerPath] = useState<string | null>(BANNER_PRESETS[0].url);
+  const [bannerTitle, setBannerTitle] = useState('');
+  const [bannerSubtitle, setBannerSubtitle] = useState('');
+  const [bannerEnabled, setBannerEnabled] = useState(true);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [bannerFileName, setBannerFileName] = useState<string | null>(null);
+
   const fetchSettings = async () => {
     setLoading(true);
     try {
@@ -46,13 +77,31 @@ export default function TournamentSettingsPage() {
       if (json.success && json.data) {
         const d: TournamentSettingsRow = json.data;
         setSettings(d);
-        setTournamentName(d.tournament_name);
-        setRegistrationFee(d.registration_fee);
-        setUpiId(d.upi_id);
-        setCapacity(d.maximum_player_capacity);
-        setRegistrationOpen(d.registration_open);
+        setTournamentName(d.tournament_name || 'Cricket Auction League 2026');
+        setRegistrationFee(d.registration_fee ?? 500);
+        setUpiId(d.upi_id || 'cricketauctionleague@okhdfcbank');
+        setCapacity(d.maximum_player_capacity ?? 100);
+        setRegistrationOpen(d.registration_open ?? true);
         setInstructions(d.registration_instructions || '');
         setUpiQrPath(d.upi_qr_path || null);
+
+        // Schedule dates format to datetime-local compatible (YYYY-MM-DDTHH:mm)
+        if (d.registration_start_date) {
+          const s = d.registration_start_date.substring(0, 16);
+          setStartDate(s);
+        }
+        if (d.registration_end_date) {
+          const e = d.registration_end_date.substring(0, 16);
+          setEndDate(e);
+        }
+
+        // Banner fields
+        setBannerPath(d.banner_image_path || BANNER_PRESETS[0].url);
+        setBannerTitle(d.banner_title || d.tournament_name || 'Cricket Auction League 2026');
+        setBannerSubtitle(
+          d.banner_subtitle || 'Grand Season Registration • Form Your Legacy on the Pitch'
+        );
+        setBannerEnabled(d.banner_enabled ?? true);
       }
     } catch (err) {
       console.error('Failed to load settings:', err);
@@ -112,6 +161,49 @@ export default function TournamentSettingsPage() {
     });
   };
 
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Banner image file size must be less than 10 MB');
+      return;
+    }
+
+    setUploadingBanner(true);
+    try {
+      const data = new FormData();
+      data.append('file', file);
+
+      const res = await fetch('/api/uploads/tournament-banner', {
+        method: 'POST',
+        body: data
+      });
+
+      const json = await res.json();
+      if (res.ok && json.filePath) {
+        setBannerPath(json.filePath);
+        setBannerFileName(json.fileName || file.name);
+        setFeedback({
+          type: 'success',
+          message: 'Tournament banner image uploaded successfully! Click "Save Tournament Settings" below to apply it live.'
+        });
+      } else {
+        alert(json.error || 'Failed to upload banner image');
+      }
+    } catch (err) {
+      console.error('Failed to upload banner:', err);
+      alert('Failed to upload banner image. Please try again.');
+    } finally {
+      setUploadingBanner(false);
+    }
+  };
+
+  const removeCustomBanner = () => {
+    setBannerPath(BANNER_PRESETS[0].url);
+    setBannerFileName(null);
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -128,13 +220,22 @@ export default function TournamentSettingsPage() {
           maximum_player_capacity: Number(capacity),
           registration_open: registrationOpen,
           registration_instructions: instructions.trim(),
-          upi_qr_path: upiQrPath
+          upi_qr_path: upiQrPath,
+          registration_start_date: startDate ? new Date(startDate).toISOString() : null,
+          registration_end_date: endDate ? new Date(endDate).toISOString() : null,
+          banner_image_path: bannerPath,
+          banner_title: bannerTitle.trim() || tournamentName.trim(),
+          banner_subtitle: bannerSubtitle.trim(),
+          banner_enabled: bannerEnabled
         })
       });
 
       const json = await res.json();
       if (res.ok && json.success) {
-        setFeedback({ type: 'success', message: 'Tournament settings and UPI rails updated successfully!' });
+        setFeedback({
+          type: 'success',
+          message: 'Tournament schedule, banner & settings updated successfully across live website!'
+        });
       } else {
         setFeedback({ type: 'error', message: json.error || 'Failed to update settings' });
       }
@@ -144,6 +245,14 @@ export default function TournamentSettingsPage() {
       setSaving(false);
     }
   };
+
+  // Schedule status evaluation
+  const now = new Date();
+  const startObj = startDate ? new Date(startDate) : null;
+  const endObj = endDate ? new Date(endDate) : null;
+  const isBeforeStart = startObj && now < startObj;
+  const isAfterEnd = endObj && now > endObj;
+  const isScheduleActive = (!isBeforeStart && !isAfterEnd);
 
   if (loading) {
     return (
@@ -159,10 +268,10 @@ export default function TournamentSettingsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-brand-dark tracking-tight">
-          Tournament Settings & Gateway Configuration
+          Tournament Settings & Portal Configuration
         </h1>
         <p className="text-xs sm:text-sm text-brand-muted mt-0.5">
-          Configure tournament parameters, live UPI payment details, custom merchant QR codes, and player quotas.
+          Configure tournament dates, custom public banner, UPI payment gateway, QR code, and registration status.
         </p>
       </div>
 
@@ -184,7 +293,9 @@ export default function TournamentSettingsPage() {
       )}
 
       <form onSubmit={handleSave} className="space-y-6">
-        {/* Registration Toggle Status Banner */}
+        {/* ============================================================================== */}
+        {/* 1. REGISTRATION MASTER SWITCH */}
+        {/* ============================================================================== */}
         <div
           className={`p-5 rounded-2xl border transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs ${
             registrationOpen
@@ -195,9 +306,7 @@ export default function TournamentSettingsPage() {
           <div className="flex items-center gap-3">
             <div
               className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
-                registrationOpen
-                  ? 'bg-primary-green text-white'
-                  : 'bg-red-600 text-white'
+                registrationOpen ? 'bg-primary-green text-white' : 'bg-red-600 text-white'
               }`}
             >
               <Power className="w-5 h-5" />
@@ -212,7 +321,7 @@ export default function TournamentSettingsPage() {
               <p className="text-xs text-brand-muted">
                 {registrationOpen
                   ? 'Players can currently register and submit UPI receipts on the public portal.'
-                  : 'Public registration form is closed. Visitors will see a registration closed notice.'}
+                  : 'Public registration form is locked. Visitors will see a registration closed notice.'}
               </p>
             </div>
           </div>
@@ -230,7 +339,249 @@ export default function TournamentSettingsPage() {
           </button>
         </div>
 
-        {/* Core Parameters Box */}
+        {/* ============================================================================== */}
+        {/* 2. REGISTRATION TIMELINE & DATES (START & END DATE) */}
+        {/* ============================================================================== */}
+        <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+            <div>
+              <h2 className="font-bold text-sm text-brand-dark uppercase tracking-wide flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-primary-green" />
+                <span>Registration Schedule & Deadlines</span>
+              </h2>
+              <p className="text-xs text-brand-muted mt-0.5">
+                Set when player registrations open and when they automatically close.
+              </p>
+            </div>
+
+            {/* Schedule Status Badge */}
+            <div className="shrink-0">
+              {isBeforeStart ? (
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                  Upcoming (Not Started)
+                </span>
+              ) : isAfterEnd ? (
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-800 border border-red-200">
+                  Deadline Passed (Expired)
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Active in Schedule
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Start Date & Time */}
+            <div>
+              <label className="block text-xs font-semibold text-brand-dark mb-1 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-primary-green" />
+                <span>Registration Start Date & Time</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-xl border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
+              />
+              <span className="text-[11px] text-brand-muted mt-1 block">
+                Public users will see a countdown until this time.
+              </span>
+            </div>
+
+            {/* End Date & Time */}
+            <div>
+              <label className="block text-xs font-semibold text-brand-dark mb-1 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-red-600" />
+                <span>Registration End Date & Time (Deadline)</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-xl border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
+              />
+              <span className="text-[11px] text-brand-muted mt-1 block">
+                Registrations will automatically disable once this date/time arrives.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ============================================================================== */}
+        {/* 3. TOURNAMENT BANNER & BRANDING CONFIGURATION */}
+        {/* ============================================================================== */}
+        <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+            <div>
+              <h2 className="font-bold text-sm text-brand-dark uppercase tracking-wide flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-primary-green" />
+                <span>Tournament Hero Banner</span>
+              </h2>
+              <p className="text-xs text-brand-muted mt-0.5">
+                Upload your custom league banner image or choose a high-resolution cricket theme.
+              </p>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bannerEnabled}
+                onChange={e => setBannerEnabled(e.target.checked)}
+                className="w-4 h-4 rounded text-primary-green focus:ring-primary-green"
+              />
+              <span className="text-xs font-semibold text-brand-dark">Show Banner on Public Form</span>
+            </label>
+          </div>
+
+          {/* Banner Live Preview Card */}
+          <div className="space-y-2">
+            <span className="text-xs font-bold text-brand-dark uppercase tracking-wider block">
+              Live Banner Preview
+            </span>
+            <div className="relative rounded-2xl overflow-hidden shadow-md border border-slate-200 min-h-[160px] sm:min-h-[200px] flex items-end p-5 sm:p-6 bg-slate-900">
+              {bannerPath && (
+                <img
+                  src={bannerPath}
+                  alt="Tournament Banner"
+                  className="absolute inset-0 w-full h-full object-cover opacity-60"
+                />
+              )}
+              {/* Gradient Overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+
+              {/* Banner Foreground Content */}
+              <div className="relative z-10 w-full text-white space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary-green text-white uppercase tracking-wider">
+                    Official Tournament
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 backdrop-blur-xs text-white">
+                    ₹{registrationFee} Fee
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 backdrop-blur-xs text-white">
+                    Max {capacity} Players
+                  </span>
+                </div>
+
+                <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white drop-shadow-sm">
+                  {bannerTitle || tournamentName || 'Cricket Auction League 2026'}
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-200 line-clamp-2 max-w-xl">
+                  {bannerSubtitle || 'Grand Season Registration • Form Your Legacy on the Pitch'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Banner Customization Controls */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label className="block text-xs font-semibold text-brand-dark mb-1">
+                Banner Headline / Title
+              </label>
+              <input
+                type="text"
+                value={bannerTitle}
+                onChange={e => setBannerTitle(e.target.value)}
+                placeholder="Cricket Auction League 2026"
+                className="w-full h-11 px-3.5 rounded-xl border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-brand-dark mb-1">
+                Banner Subtitle / Tagline
+              </label>
+              <input
+                type="text"
+                value={bannerSubtitle}
+                onChange={e => setBannerSubtitle(e.target.value)}
+                placeholder="Grand Season Registration • Form Your Legacy on the Pitch"
+                className="w-full h-11 px-3.5 rounded-xl border border-brand-border text-xs sm:text-sm text-brand-dark bg-white focus-ring"
+              />
+            </div>
+          </div>
+
+          {/* Banner Image Upload & Preset selector */}
+          <div className="pt-2 border-t border-gray-100 space-y-3">
+            <label className="block text-xs font-bold text-brand-dark">
+              Custom Banner Image (Upload your own or select a theme)
+            </label>
+
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+              {/* File Uploader */}
+              <label className="flex-1 flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 hover:border-primary-green rounded-xl cursor-pointer bg-white hover:bg-light-green/20 transition-all text-center">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleBannerUpload}
+                  disabled={uploadingBanner}
+                />
+                {uploadingBanner ? (
+                  <div className="flex items-center gap-2 text-xs text-primary-green font-medium">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Uploading custom banner...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs font-semibold text-brand-dark">
+                    <Upload className="w-4 h-4 text-primary-green" />
+                    <span>Upload Custom Banner Photo (PNG/JPG up to 10MB)</span>
+                  </div>
+                )}
+              </label>
+
+              {bannerPath && (
+                <button
+                  type="button"
+                  onClick={removeCustomBanner}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 transition-colors shrink-0"
+                >
+                  Reset to Default
+                </button>
+              )}
+            </div>
+
+            {/* Quick Presets */}
+            <div>
+              <span className="text-[11px] font-bold text-brand-muted uppercase tracking-wider block mb-1.5">
+                Or choose from High-Resolution Cricket Themes:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {BANNER_PRESETS.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setBannerPath(preset.url);
+                      setBannerFileName(null);
+                    }}
+                    className={`relative rounded-xl overflow-hidden border p-2 text-left transition-all flex items-center gap-2 ${
+                      bannerPath === preset.url
+                        ? 'border-primary-green ring-2 ring-primary-green/20 bg-light-green/20'
+                        : 'border-brand-border hover:border-primary-green/50 bg-white'
+                    }`}
+                  >
+                    <img
+                      src={preset.url}
+                      alt={preset.name}
+                      className="w-10 h-10 rounded-lg object-cover shrink-0"
+                    />
+                    <span className="text-xs font-medium text-brand-dark leading-tight line-clamp-2">
+                      {preset.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ============================================================================== */}
+        {/* 4. CORE PARAMETERS (TOURNAMENT NAME & CAPACITY) */}
+        {/* ============================================================================== */}
         <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
           <h2 className="font-bold text-sm text-brand-dark uppercase tracking-wide pb-2 border-b border-gray-100">
             Tournament Parameters
@@ -271,7 +622,7 @@ export default function TournamentSettingsPage() {
         </div>
 
         {/* ============================================================================== */}
-        {/* UPI Gateway & Payment Config + Custom QR Uploader */}
+        {/* 5. UPI GATEWAY & PAYMENT CONFIG + CUSTOM QR UPLOADER */}
         {/* ============================================================================== */}
         <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
           <div className="flex items-center justify-between pb-2 border-b border-gray-100">
@@ -284,11 +635,13 @@ export default function TournamentSettingsPage() {
               </p>
             </div>
 
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-              upiQrPath
-                ? 'bg-light-green text-primary-green border border-primary-green/20'
-                : 'bg-slate-100 text-slate-700'
-            }`}>
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                upiQrPath
+                  ? 'bg-light-green text-primary-green border border-primary-green/20'
+                  : 'bg-slate-100 text-slate-700'
+              }`}
+            >
               {upiQrPath ? 'Custom QR Code Active' : 'Dynamic NPCI QR Active'}
             </span>
           </div>
@@ -307,7 +660,9 @@ export default function TournamentSettingsPage() {
                 Live Public Preview
               </span>
               <span className="text-[10px] text-brand-muted text-center max-w-[170px]">
-                {upiQrPath ? 'Displaying your uploaded merchant QR image' : 'Displaying auto-generated ₹' + registrationFee + ' UPI QR'}
+                {upiQrPath
+                  ? 'Displaying your uploaded merchant QR image'
+                  : 'Displaying auto-generated ₹' + registrationFee + ' UPI QR'}
               </span>
             </div>
 
@@ -425,16 +780,14 @@ export default function TournamentSettingsPage() {
                     )}
                   </label>
                 )}
-
-                <p className="text-[11px] text-brand-muted mt-1.5 leading-relaxed">
-                  <strong>Tip:</strong> If you upload a custom QR, players will scan your uploaded merchant code directly. If you leave it empty or remove it, the system automatically generates a dynamic green NPCI QR code encoded with your UPI ID.
-                </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Registration Instructions */}
+        {/* ============================================================================== */}
+        {/* 6. REGISTRATION INSTRUCTIONS */}
+        {/* ============================================================================== */}
         <div className="bg-white border border-brand-border rounded-2xl p-5 sm:p-6 shadow-xs space-y-3">
           <h2 className="font-bold text-sm text-brand-dark uppercase tracking-wide pb-2 border-b border-gray-100">
             Player Registration Instructions
@@ -450,7 +803,9 @@ export default function TournamentSettingsPage() {
           </div>
         </div>
 
-        {/* Save Button */}
+        {/* ============================================================================== */}
+        {/* SUBMIT BUTTON */}
+        {/* ============================================================================== */}
         <div className="flex items-center justify-between pt-2">
           <span className="text-xs text-brand-muted">
             All updates immediately sync across public forms and admin dashboards.

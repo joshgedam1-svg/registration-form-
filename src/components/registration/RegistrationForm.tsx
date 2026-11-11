@@ -21,7 +21,10 @@ import {
   Trash2,
   Send,
   Loader2,
-  Info
+  Info,
+  Calendar,
+  Clock,
+  Trophy
 } from 'lucide-react';
 
 interface RegistrationFormProps {
@@ -206,15 +209,87 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
     }
   };
 
+  const now = new Date();
+  const startDate = settings.registration_start_date ? new Date(settings.registration_start_date) : null;
+  const endDate = settings.registration_end_date ? new Date(settings.registration_end_date) : null;
+
+  const isBeforeStart = startDate && now < startDate;
+  const isAfterEnd = endDate && now > endDate;
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // 1. If admin manually closed registrations
   if (!settings.registration_open) {
     return (
-      <div className="bg-white border border-brand-border rounded-2xl p-8 text-center max-w-xl mx-auto my-12 shadow-sm">
-        <div className="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
+      <div className="bg-white border border-brand-border rounded-2xl p-8 text-center max-w-xl mx-auto my-12 shadow-sm space-y-4">
+        <div className="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
           <AlertTriangle className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-bold text-brand-dark mb-2">Registrations Closed</h2>
-        <p className="text-brand-muted text-sm leading-relaxed mb-6">
-          Player registrations for {settings.tournament_name} are currently closed. If you have already registered, you can track your verification status below.
+        <h2 className="text-2xl font-bold text-brand-dark">Registrations Closed</h2>
+        <p className="text-brand-muted text-sm leading-relaxed">
+          Player registrations for {settings.tournament_name} have been paused by the tournament committee. If you have already registered, you can track your verification status below.
+        </p>
+        <button
+          onClick={() => router.push('/track-status')}
+          className="inline-flex items-center justify-center px-6 py-2.5 rounded-lg bg-primary-green hover:bg-primary-dark text-white font-medium transition-colors"
+        >
+          Track My Registration Status
+        </button>
+      </div>
+    );
+  }
+
+  // 2. If registration date has not started yet
+  if (isBeforeStart) {
+    return (
+      <div className="bg-white border border-brand-border rounded-2xl p-8 text-center max-w-xl mx-auto my-12 shadow-sm space-y-4">
+        <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+          <Calendar className="w-8 h-8" />
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold">
+          <span>Upcoming Registration</span>
+        </div>
+        <h2 className="text-2xl font-bold text-brand-dark">Registrations Opening Soon</h2>
+        <p className="text-brand-muted text-sm leading-relaxed">
+          Official player registrations for <strong className="text-brand-dark">{settings.tournament_name}</strong> will officially open on:
+        </p>
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 inline-block font-mono text-sm font-bold text-primary-green">
+          {formatDate(startDate)}
+        </div>
+        <p className="text-xs text-brand-muted">
+          Please check back at that time to complete your player entry and secure your slot!
+        </p>
+        <button
+          onClick={() => router.push('/track-status')}
+          className="inline-flex items-center justify-center px-6 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-xs transition-colors"
+        >
+          Track Existing Registration
+        </button>
+      </div>
+    );
+  }
+
+  // 3. If registration deadline has passed
+  if (isAfterEnd) {
+    return (
+      <div className="bg-white border border-brand-border rounded-2xl p-8 text-center max-w-xl mx-auto my-12 shadow-sm space-y-4">
+        <div className="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+          <Clock className="w-8 h-8" />
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-800 text-xs font-bold">
+          <span>Registration Expired</span>
+        </div>
+        <h2 className="text-2xl font-bold text-brand-dark">Registration Deadline Passed</h2>
+        <p className="text-brand-muted text-sm leading-relaxed">
+          The deadline for player registrations was on <strong className="text-brand-dark">{formatDate(endDate)}</strong>. Submissions are now officially closed for the upcoming auction docket.
         </p>
         <button
           onClick={() => router.push('/track-status')}
@@ -228,21 +303,69 @@ export default function RegistrationForm({ settings }: RegistrationFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-3xl mx-auto pb-16">
-      {/* Header Banner */}
-      <div className="bg-white border border-brand-border rounded-2xl p-6 sm:p-7 shadow-xs space-y-2.5">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-light-green text-primary-green text-xs font-semibold border border-primary-green/20">
-          <ShieldCheck className="w-4 h-4" />
-          <span>Registration Fee: ₹{settings.registration_fee} • Strict League Verification</span>
+      {/* ============================================================================== */}
+      {/* PROPER TOURNAMENT HERO BANNER */}
+      {/* ============================================================================== */}
+      {settings.banner_enabled !== false && (
+        <div className="relative rounded-3xl overflow-hidden shadow-md border border-slate-200/80 min-h-[190px] sm:min-h-[240px] flex items-end p-5 sm:p-7 bg-slate-950">
+          {settings.banner_image_path ? (
+            <img
+              src={settings.banner_image_path}
+              alt="Tournament Hero Banner"
+              className="absolute inset-0 w-full h-full object-cover opacity-60"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 via-slate-900 to-slate-950 opacity-90" />
+          )}
+
+          {/* Vignette / Gradient overlays */}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+
+          {/* Banner Contents */}
+          <div className="relative z-10 w-full text-white space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-primary-green text-white uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                <Trophy className="w-3.5 h-3.5" />
+                <span>Official Tournament</span>
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-white/20 backdrop-blur-md text-white border border-white/20">
+                ₹{settings.registration_fee} Fee
+              </span>
+              {endDate && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-amber-400/25 text-amber-300 border border-amber-400/30 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>Deadline: {formatDate(endDate)}</span>
+                </span>
+              )}
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white drop-shadow-md">
+              {settings.banner_title || settings.tournament_name}
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-200 max-w-2xl leading-relaxed">
+              {settings.banner_subtitle || 'Official Player Registration Portal • Submit your details and entry fee to enter the auction docket.'}
+            </p>
+          </div>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-dark tracking-tight">
-          {settings.tournament_name}
-        </h1>
-        <p className="text-primary-green font-bold text-sm sm:text-base">
-          Official Player Registration Portal
-        </p>
-        <p className="text-brand-muted text-xs sm:text-sm leading-relaxed pt-0.5">
-          Complete your profile, submit emergency contacts, and confirm your ₹{settings.registration_fee} UPI payment to enter the tournament docket.
-        </p>
+      )}
+
+      {/* Registration Info Callout */}
+      <div className="bg-white border border-brand-border rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-light-green text-primary-green flex items-center justify-center shrink-0 border border-primary-green/20">
+            <ShieldCheck className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-bold text-slate-800 block">Strict League Verification</span>
+            <span className="text-slate-500">Every submission is verified against official bank UTR before approval.</span>
+          </div>
+        </div>
+
+        {startDate && (
+          <div className="text-[11px] text-slate-500 shrink-0 font-medium bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+            Started: {formatDate(startDate)}
+          </div>
+        )}
       </div>
 
       {/* Server Error Alert */}

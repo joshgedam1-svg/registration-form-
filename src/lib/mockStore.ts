@@ -30,6 +30,12 @@ const initialSettings: TournamentSettingsRow = {
   registration_open: true,
   registration_instructions:
     'Scan QR or copy UPI ID. Pay ₹500 from your UPI app (Google Pay, PhonePe, Paytm). Copy the 12-digit UTR and upload the payment screenshot.',
+  registration_start_date: '2026-03-01T00:00',
+  registration_end_date: '2026-04-30T23:59',
+  banner_image_path: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=1200&auto=format&fit=crop&q=80',
+  banner_title: 'Cricket Auction League 2026',
+  banner_subtitle: 'Grand Season Registration • Form Your Legacy on the Pitch',
+  banner_enabled: true,
   updated_by: null,
   updated_at: new Date().toISOString()
 };

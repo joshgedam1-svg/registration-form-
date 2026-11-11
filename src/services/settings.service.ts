@@ -5,36 +5,41 @@ import { TournamentSettingsRow, PublicTournamentSettings } from '@/types/setting
 
 export const settingsService = {
   async getPublicSettings(): Promise<PublicTournamentSettings> {
+    const mock = mockStore.getSettings();
+
     if (isSupabaseConfigured()) {
       try {
         const supabase = getAdminClient();
         const { data, error } = await supabase
           .from('tournament_settings')
-          .select('tournament_name, registration_fee, upi_id, upi_qr_path, maximum_player_capacity, registration_open, registration_instructions')
+          .select('*')
           .limit(1)
           .single();
 
         if (error || !data) {
-          console.warn('Error fetching Supabase settings, falling back to store:', error);
-          const mock = mockStore.getSettings();
+          console.warn('Error fetching Supabase settings, using store:', error?.message);
+        } else {
           return {
-            tournament_name: mock.tournament_name,
-            registration_fee: mock.registration_fee,
-            upi_id: mock.upi_id,
-            upi_qr_path: mock.upi_qr_path,
-            maximum_player_capacity: mock.maximum_player_capacity,
-            registration_open: mock.registration_open,
-            registration_instructions: mock.registration_instructions
+            tournament_name: data.tournament_name || mock.tournament_name,
+            registration_fee: data.registration_fee ?? mock.registration_fee,
+            upi_id: data.upi_id || mock.upi_id,
+            upi_qr_path: data.upi_qr_path ?? mock.upi_qr_path,
+            maximum_player_capacity: data.maximum_player_capacity ?? mock.maximum_player_capacity,
+            registration_open: data.registration_open ?? mock.registration_open,
+            registration_instructions: data.registration_instructions ?? mock.registration_instructions,
+            registration_start_date: (data as any).registration_start_date ?? mock.registration_start_date,
+            registration_end_date: (data as any).registration_end_date ?? mock.registration_end_date,
+            banner_image_path: (data as any).banner_image_path ?? mock.banner_image_path,
+            banner_title: (data as any).banner_title ?? mock.banner_title,
+            banner_subtitle: (data as any).banner_subtitle ?? mock.banner_subtitle,
+            banner_enabled: (data as any).banner_enabled ?? mock.banner_enabled
           };
         }
-
-        return data as PublicTournamentSettings;
       } catch (err) {
         console.error('Failed to query Supabase settings:', err);
       }
     }
 
-    const mock = mockStore.getSettings();
     return {
       tournament_name: mock.tournament_name,
       registration_fee: mock.registration_fee,
@@ -42,11 +47,19 @@ export const settingsService = {
       upi_qr_path: mock.upi_qr_path,
       maximum_player_capacity: mock.maximum_player_capacity,
       registration_open: mock.registration_open,
-      registration_instructions: mock.registration_instructions
+      registration_instructions: mock.registration_instructions,
+      registration_start_date: mock.registration_start_date,
+      registration_end_date: mock.registration_end_date,
+      banner_image_path: mock.banner_image_path,
+      banner_title: mock.banner_title,
+      banner_subtitle: mock.banner_subtitle,
+      banner_enabled: mock.banner_enabled
     };
   },
 
   async getAllSettings(): Promise<TournamentSettingsRow> {
+    const mock = mockStore.getSettings();
+
     if (isSupabaseConfigured()) {
       try {
         const supabase = getAdminClient();
@@ -57,7 +70,16 @@ export const settingsService = {
           .single();
 
         if (!error && data) {
-          return data as TournamentSettingsRow;
+          return {
+            ...mock,
+            ...data,
+            registration_start_date: (data as any).registration_start_date ?? mock.registration_start_date,
+            registration_end_date: (data as any).registration_end_date ?? mock.registration_end_date,
+            banner_image_path: (data as any).banner_image_path ?? mock.banner_image_path,
+            banner_title: (data as any).banner_title ?? mock.banner_title,
+            banner_subtitle: (data as any).banner_subtitle ?? mock.banner_subtitle,
+            banner_enabled: (data as any).banner_enabled ?? mock.banner_enabled
+          } as TournamentSettingsRow;
         }
       } catch (err) {
         console.error('Failed to query Supabase settings:', err);
@@ -68,6 +90,9 @@ export const settingsService = {
   },
 
   async updateSettings(updates: Partial<TournamentSettingsRow>, adminId?: string): Promise<TournamentSettingsRow> {
+    // Always update mockStore so local state and fallbacks are instantly synced
+    const updatedMock = mockStore.updateSettings(updates);
+
     if (isSupabaseConfigured()) {
       try {
         const supabase = getAdminClient();
@@ -75,6 +100,8 @@ export const settingsService = {
 
         if (current && (current as any).id) {
           const currentId = (current as any).id;
+
+          // Attempt update with all fields
           const { data, error } = await supabase
             .from('tournament_settings')
             .update({
@@ -96,7 +123,39 @@ export const settingsService = {
               new_values: updates
             });
 
-            return data as TournamentSettingsRow;
+            return {
+              ...updatedMock,
+              ...data
+            } as TournamentSettingsRow;
+          }
+
+          // If there was an error (e.g. some columns not in Supabase yet), fallback to core columns
+          if (error) {
+            console.warn('Full update failed, attempting core columns update:', error.message);
+            const coreFields: any = {};
+            const allowed = [
+              'tournament_name',
+              'registration_fee',
+              'upi_id',
+              'upi_qr_path',
+              'maximum_player_capacity',
+              'registration_open',
+              'registration_instructions'
+            ];
+            for (const key of allowed) {
+              if (key in updates) {
+                coreFields[key] = (updates as any)[key];
+              }
+            }
+
+            await supabase
+              .from('tournament_settings')
+              .update({
+                ...coreFields,
+                updated_by: adminId || null,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', currentId);
           }
         }
       } catch (err) {
@@ -104,6 +163,6 @@ export const settingsService = {
       }
     }
 
-    return mockStore.updateSettings(updates);
+    return updatedMock;
   }
 };

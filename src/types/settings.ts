@@ -1,8 +1,26 @@
 import { Database } from './database.types';
 
-export type TournamentSettingsRow = Database['public']['Tables']['tournament_settings']['Row'];
-export type TournamentSettingsInsert = Database['public']['Tables']['tournament_settings']['Insert'];
-export type TournamentSettingsUpdate = Database['public']['Tables']['tournament_settings']['Update'];
+export interface TournamentSettingsRow {
+  id: string;
+  tournament_name: string;
+  registration_fee: number;
+  upi_id: string;
+  upi_qr_path: string | null;
+  maximum_player_capacity: number;
+  registration_open: boolean;
+  registration_instructions: string | null;
+  registration_start_date?: string | null;
+  registration_end_date?: string | null;
+  banner_image_path?: string | null;
+  banner_title?: string | null;
+  banner_subtitle?: string | null;
+  banner_enabled?: boolean;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export type TournamentSettingsInsert = Partial<TournamentSettingsRow>;
+export type TournamentSettingsUpdate = Partial<TournamentSettingsRow>;
 
 export interface PublicTournamentSettings {
   tournament_name: string;
@@ -12,5 +30,10 @@ export interface PublicTournamentSettings {
   maximum_player_capacity: number;
   registration_open: boolean;
   registration_instructions: string | null;
+  registration_start_date?: string | null;
+  registration_end_date?: string | null;
+  banner_image_path?: string | null;
+  banner_title?: string | null;
+  banner_subtitle?: string | null;
+  banner_enabled?: boolean;
 }
-
