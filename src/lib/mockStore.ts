@@ -340,20 +340,29 @@ export const mockStore = {
     const playerId = `usr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const paymentId = `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
-    // Check duplicate mobile or UTR
-    const cleanMobile = formData.mobile.replace(/\D/g, '');
+    // Check duplicate mobile, email or UTR
+    const cleanMobile = formData.mobile.replace(/\D/g, '').slice(-10);
     const duplicateMobile = globalMock.__MOCK_DB__.players.find(
-      p => p.mobile.replace(/\D/g, '') === cleanMobile
+      p => p.mobile.replace(/\D/g, '').slice(-10) === cleanMobile
     );
     if (duplicateMobile) {
-      throw new Error(`Mobile number is already registered under Registration ID: ${duplicateMobile.registration_id}`);
+      throw new Error(`Mobile number '${formData.mobile}' is already registered under Registration ID: ${duplicateMobile.registration_id}. Duplicate entries are not allowed.`);
     }
 
+    const cleanEmail = (formData.email || '').trim().toLowerCase();
+    const duplicateEmail = globalMock.__MOCK_DB__.players.find(
+      p => p.email.trim().toLowerCase() === cleanEmail
+    );
+    if (duplicateEmail) {
+      throw new Error(`Email address '${formData.email}' is already registered under Registration ID: ${duplicateEmail.registration_id}. Duplicate entries are not allowed.`);
+    }
+
+    const cleanUtr = (formData.utr_number || '').trim().toUpperCase();
     const duplicateUtr = globalMock.__MOCK_DB__.payments.find(
-      p => p.utr_number === formData.utr_number
+      p => p.utr_number.trim().toUpperCase() === cleanUtr
     );
     if (duplicateUtr) {
-      throw new Error(`UTR / Transaction Reference '${formData.utr_number}' has already been submitted.`);
+      throw new Error(`Payment UTR / Transaction Reference '${formData.utr_number}' has already been submitted. Duplicate payments are not allowed.`);
     }
 
     const newPaymentRecord = {

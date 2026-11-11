@@ -24,30 +24,49 @@ export const registrationService = {
       try {
         const supabase = getAdminClient();
 
-        // Check duplicate mobile in Supabase
-        const { data: existingPlayer } = await supabase
+        // 1. Check duplicate mobile in Supabase
+        const cleanDigits = validated.mobile.replace(/\D/g, '').slice(-10);
+        const { data: existingMobile } = await supabase
           .from('players')
-          .select('id, registration_id')
-          .eq('mobile', normalizedMobile)
+          .select('id, registration_id, mobile')
+          .or(`mobile.eq.${normalizedMobile},mobile.ilike.%${cleanDigits}`)
+          .limit(1)
           .maybeSingle();
 
-        if (existingPlayer) {
-          const ep = existingPlayer as any;
+        if (existingMobile) {
+          const ep = existingMobile as any;
           throw new Error(
-            `Mobile number ${normalizedMobile} is already registered under Registration ID: ${ep.registration_id}`
+            `Mobile number (${validated.mobile}) is already registered under Registration ID: ${ep.registration_id}. Duplicate entries are not allowed.`
           );
         }
 
-        // Check duplicate UTR in Supabase
+        // 2. Check duplicate email in Supabase
+        const { data: existingEmail } = await supabase
+          .from('players')
+          .select('id, registration_id')
+          .eq('email', normalizedEmail)
+          .limit(1)
+          .maybeSingle();
+
+        if (existingEmail) {
+          const ee = existingEmail as any;
+          throw new Error(
+            `Email address (${normalizedEmail}) is already registered under Registration ID: ${ee.registration_id}. Duplicate entries are not allowed.`
+          );
+        }
+
+        // 3. Check duplicate UTR in Supabase
+        const cleanUtr = validated.utr_number.trim();
         const { data: existingUtr } = await supabase
           .from('payments')
           .select('id, utr_number')
-          .eq('utr_number', validated.utr_number)
+          .ilike('utr_number', cleanUtr)
+          .limit(1)
           .maybeSingle();
 
         if (existingUtr) {
           throw new Error(
-            `Transaction Reference / UTR ${validated.utr_number} has already been submitted for verification.`
+            `Payment UTR / Transaction Reference '${cleanUtr}' has already been used by another registration. Duplicate payments are not allowed.`
           );
         }
 
