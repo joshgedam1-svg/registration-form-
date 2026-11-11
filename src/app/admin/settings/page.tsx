@@ -71,11 +71,13 @@ export default function TournamentSettingsPage() {
 
   const fetchSettings = async () => {
     // 1. Immediately hydrate from localStorage if present
+    let hasLocal = false;
     if (typeof window !== 'undefined') {
       try {
         const local = localStorage.getItem('cal_tournament_settings');
         if (local) {
           const parsed = JSON.parse(local);
+          hasLocal = true;
           if (parsed.tournament_name) setTournamentName(parsed.tournament_name);
           if (parsed.registration_fee !== undefined) setRegistrationFee(parsed.registration_fee);
           if (parsed.upi_id) setUpiId(parsed.upi_id);
@@ -100,29 +102,33 @@ export default function TournamentSettingsPage() {
       if (json.success && json.data) {
         const d: TournamentSettingsRow = json.data;
         setSettings(d);
-        if (d.tournament_name) setTournamentName(d.tournament_name);
-        if (d.registration_fee !== undefined) setRegistrationFee(d.registration_fee);
-        if (d.upi_id) setUpiId(d.upi_id);
-        if (d.maximum_player_capacity !== undefined) setCapacity(d.maximum_player_capacity);
-        if (d.registration_open !== undefined) setRegistrationOpen(d.registration_open);
-        if (d.registration_instructions !== undefined) setInstructions(d.registration_instructions || '');
-        if (d.upi_qr_path !== undefined) setUpiQrPath(d.upi_qr_path || null);
 
-        // Schedule dates format to datetime-local compatible (YYYY-MM-DDTHH:mm)
-        if (d.registration_start_date) {
-          const s = d.registration_start_date.substring(0, 16);
-          setStartDate(s);
-        }
-        if (d.registration_end_date) {
-          const e = d.registration_end_date.substring(0, 16);
-          setEndDate(e);
-        }
+        // Only overwrite inputs from API if localStorage does not already have user's saved data
+        if (!hasLocal) {
+          if (d.tournament_name) setTournamentName(d.tournament_name);
+          if (d.registration_fee !== undefined) setRegistrationFee(d.registration_fee);
+          if (d.upi_id) setUpiId(d.upi_id);
+          if (d.maximum_player_capacity !== undefined) setCapacity(d.maximum_player_capacity);
+          if (d.registration_open !== undefined) setRegistrationOpen(d.registration_open);
+          if (d.registration_instructions !== undefined) setInstructions(d.registration_instructions || '');
+          if (d.upi_qr_path !== undefined) setUpiQrPath(d.upi_qr_path || null);
 
-        // Banner fields
-        if (d.banner_image_path) setBannerPath(d.banner_image_path);
-        if (d.banner_title) setBannerTitle(d.banner_title);
-        if (d.banner_subtitle) setBannerSubtitle(d.banner_subtitle);
-        if (d.banner_enabled !== undefined) setBannerEnabled(d.banner_enabled);
+          // Schedule dates format to datetime-local compatible (YYYY-MM-DDTHH:mm)
+          if (d.registration_start_date) {
+            const s = d.registration_start_date.substring(0, 16);
+            setStartDate(s);
+          }
+          if (d.registration_end_date) {
+            const e = d.registration_end_date.substring(0, 16);
+            setEndDate(e);
+          }
+
+          // Banner fields
+          if (d.banner_image_path) setBannerPath(d.banner_image_path);
+          if (d.banner_title) setBannerTitle(d.banner_title);
+          if (d.banner_subtitle) setBannerSubtitle(d.banner_subtitle);
+          if (d.banner_enabled !== undefined) setBannerEnabled(d.banner_enabled);
+        }
       }
     } catch (err) {
       console.error('Failed to load settings:', err);
