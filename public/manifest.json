@@ -1,0 +1,38 @@
+{
+  "name": "Cricket Auction League 2026",
+  "short_name": "CAL 2026",
+  "description": "Official Cricket Auction League Registration & Tournament Portal",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F8FAFC",
+  "theme_color": "#176B45",
+  "categories": ["sports", "productivity"],
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Register Player",
+      "url": "/register",
+      "description": "Register for the Cricket Auction League"
+    },
+    {
+      "name": "Track Status",
+      "url": "/track-status",
+      "description": "Track your player registration status"
+    },
+    {
+      "name": "Admin Portal",
+      "url": "/admin/players",
+      "description": "Manage players and verify payments"
+    }
+  ]
+}
+

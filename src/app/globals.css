@@ -39,6 +39,14 @@
   scrollbar-width: none;
 }
 
+/* Safe area insets for modern mobile PWA / notch / home indicator */
+.safe-bottom {
+  padding-bottom: max(0.375rem, env(safe-area-inset-bottom));
+}
+.safe-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
 /* Custom brand colors aligned with the Cricket Auction League guidelines */
 .bg-canvas {
   background-color: #F5F7FA;

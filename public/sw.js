@@ -1,10 +1,46 @@
-// Cricket Auction League - Mobile Push Service Worker
+// Cricket Auction League - PWA & Push Service Worker
+const CACHE_NAME = 'cal-pwa-v1';
+const PRECACHE_ASSETS = ['/', '/logo.svg', '/manifest.json'];
+
 self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS))
+  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+        })
+      )
+    )
+  );
+  self.clients.claim();
+});
+
+// Network-first caching for offline PWA support
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  if (event.request.url.startsWith('chrome-extension')) return;
+  if (event.request.url.includes('/api/')) return; // live API requests
+
+  event.respondWith(
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request))
+  );
 });
 
 // Listen for push notifications

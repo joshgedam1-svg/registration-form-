@@ -7,43 +7,54 @@ import { UserPlus, Search, ShieldCheck } from 'lucide-react';
 export default function MobileBottomNav() {
   const pathname = usePathname();
 
-  // Hide on admin routes
+  // Hide on admin routes (AdminLayout has its own responsive sidebar/drawer)
   if (pathname.startsWith('/admin')) {
     return null;
   }
 
   return (
-    <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-brand-border py-2 px-6 flex justify-around items-center shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+    <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-1.5 px-4 flex justify-around items-center shadow-lg safe-bottom">
       <Link
         href="/register"
-        className={`flex flex-col items-center gap-1 py-1 text-xs font-medium transition-colors ${
-          pathname === '/register' ? 'text-primary-green font-bold' : 'text-brand-muted hover:text-brand-dark'
+        className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors ${
+          pathname === '/register'
+            ? 'text-primary-green'
+            : 'text-slate-500 hover:text-slate-900'
         }`}
       >
-        <UserPlus className="w-5 h-5" />
+        <div className={`p-1 rounded-md ${pathname === '/register' ? 'bg-light-green text-primary-green' : ''}`}>
+          <UserPlus className="w-4 h-4" />
+        </div>
         <span>Register</span>
       </Link>
 
       <Link
         href="/track-status"
-        className={`flex flex-col items-center gap-1 py-1 text-xs font-medium transition-colors ${
-          pathname === '/track-status' ? 'text-primary-green font-bold' : 'text-brand-muted hover:text-brand-dark'
+        className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors ${
+          pathname === '/track-status'
+            ? 'text-primary-green'
+            : 'text-slate-500 hover:text-slate-900'
         }`}
       >
-        <Search className="w-5 h-5" />
+        <div className={`p-1 rounded-md ${pathname === '/track-status' ? 'bg-light-green text-primary-green' : ''}`}>
+          <Search className="w-4 h-4" />
+        </div>
         <span>Track Status</span>
       </Link>
 
       <Link
         href="/admin/dashboard"
-        className={`flex flex-col items-center gap-1 py-1 text-xs font-medium transition-colors ${
-          pathname.startsWith('/admin') ? 'text-primary-green font-bold' : 'text-brand-muted hover:text-brand-dark'
+        className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[10px] font-semibold transition-colors ${
+          pathname.startsWith('/admin')
+            ? 'text-primary-green'
+            : 'text-slate-500 hover:text-slate-900'
         }`}
       >
-        <ShieldCheck className="w-5 h-5" />
+        <div className={`p-1 rounded-md ${pathname.startsWith('/admin') ? 'bg-light-green text-primary-green' : ''}`}>
+          <ShieldCheck className="w-4 h-4" />
+        </div>
         <span>Admin</span>
       </Link>
     </nav>
   );
 }
-
