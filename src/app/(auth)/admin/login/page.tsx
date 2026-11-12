@@ -2,45 +2,38 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle, Loader2, Sparkles } from 'lucide-react';
-import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
+import { ShieldCheck, Lock, Mail, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function AdminLoginPage() {
-  const [email, setEmail] = useState('admin@cricketauctionleague.com');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
-      if (isSupabaseConfigured()) {
-        const supabase = createClient();
-        const { error: authError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
 
-        if (authError) {
-          throw new Error(authError.message);
-        }
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Invalid email or password');
       }
 
-      // Set cookie and navigate cleanly
-      document.cookie = 'cal_admin_session=true; path=/; max-age=604800; SameSite=Lax';
+      // Successful authentication
       window.location.href = '/admin/dashboard';
     } catch (err: any) {
       setError(err.message || 'Invalid email or password');
       setLoading(false);
     }
-  };
-
-  const handleInstantDemoLogin = () => {
-    document.cookie = 'cal_admin_session=true; path=/; max-age=604800; SameSite=Lax';
-    window.location.href = '/admin/dashboard';
   };
 
   return (
@@ -64,25 +57,6 @@ export default function AdminLoginPage() {
           </div>
         )}
 
-        {/* 1-Click Instant Demo Login Banner */}
-        <div className="p-4 bg-light-green/70 border border-primary-green/30 rounded-xl space-y-2">
-          <div className="flex items-center gap-2 text-primary-green font-bold text-xs uppercase tracking-wider">
-            <Sparkles className="w-4 h-4" />
-            <span>Quick Admin Access</span>
-          </div>
-          <p className="text-xs text-brand-dark">
-            Click below for instant one-click access into the Tournament Admin Dashboard.
-          </p>
-          <button
-            type="button"
-            onClick={handleInstantDemoLogin}
-            className="w-full h-10 rounded-lg bg-primary-green hover:bg-primary-dark text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-xs"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Enter Admin Portal (1-Click)</span>
-          </button>
-        </div>
-
         <form onSubmit={handleLogin} className="space-y-4 pt-1">
           <div>
             <label className="block text-xs font-semibold text-brand-dark mb-1">
@@ -95,7 +69,8 @@ export default function AdminLoginPage() {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="admin@cricketauctionleague.com"
+                placeholder="Enter admin email"
+                autoComplete="email"
                 className="w-full h-11 pl-10 pr-3.5 rounded-lg border border-brand-border text-sm text-brand-dark bg-white focus-ring"
               />
             </div>
@@ -112,7 +87,8 @@ export default function AdminLoginPage() {
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Enter password"
+                autoComplete="current-password"
                 className="w-full h-11 pl-10 pr-3.5 rounded-lg border border-brand-border text-sm text-brand-dark bg-white focus-ring"
               />
             </div>
@@ -121,14 +97,18 @@ export default function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-11 rounded-lg border border-brand-border bg-white hover:bg-gray-50 text-brand-dark font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-70"
+            className="w-full h-11 rounded-lg bg-primary-green hover:bg-primary-dark text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-70"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin text-primary-green" /> : <ShieldCheck className="w-4 h-4 text-primary-green" />}
-            <span>Sign In with Password</span>
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+            ) : (
+              <ShieldCheck className="w-4 h-4 text-white" />
+            )}
+            <span>Sign In to Admin Portal</span>
           </button>
         </form>
 
-        <div className="text-center pt-1">
+        <div className="text-center pt-1 border-t border-slate-100">
           <Link
             href="/register"
             className="text-xs text-brand-muted hover:text-primary-green transition-colors inline-flex items-center gap-1 font-medium"
